@@ -1,7 +1,7 @@
 """Read JSON frame lines from the C3 and append them to a JSONL file.
 usage: capture.py <port> <out.jsonl> <seconds> [label]
 Opening the port reboots a USB-Serial/JTAG board; frames are only heard after it has started.
-Tip: recording can also be done on the device itself (web page, Record tab)."""
+Tip: recording can also be done on the device itself (web page, IR signals tab)."""
 import json, sys, time, serial
 
 port, out, secs = sys.argv[1], sys.argv[2], float(sys.argv[3])

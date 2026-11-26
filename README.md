@@ -32,13 +32,16 @@ spare remote (code your appliances ignore) ──IR──▶ [VS1838B ×1–4] �
 
 | Piece | State |
 |---|---|
-| Record: continuous capture, numbered drafts, press counter, batch naming | Working, tested end to end |
+| Record: continuous capture, numbered drafts, press counter, batch naming, test-send of a draft | Working |
 | Signals: saved in flash with name, type, device, active/disabled state | Working, survives reboot |
-| Rules: heard signal → list of steps (send IR, wait, switch layer, TV key), enable/disable | Working |
-| Web config page (Bluetooth, USB serial, demo) with waveform view, log, backup | Working; tested against real firmware through a bridge and in demo mode. **Web Bluetooth and Web Serial pickers are not exercised by automated tests** |
+| Infrared transmit (RMT hardware carrier, self-reception guard) | Working: the author recorded signals and re-sent them successfully. Not every kind of appliance has been tried |
+| Emitter ring (ULN2003 + 8 LEDs) | Built, all LEDs seen through a phone camera (`ledtest`). See [docs/wiring.html](docs/wiring.html) |
 | Receiver artifact repair for A/C frames | Working |
-| RMT transmit with hardware carrier, self-reception guard | Implemented. **Not yet verified on a real appliance** |
-| Emitter ring (ULN2003 + 8 LEDs) | Built, being verified (LED test mode, `ledtest`). See [docs/wiring.html](docs/wiring.html) |
+| TV remote over Bluetooth | Keys confirmed by the author on one TCL Android TV (see below) |
+| Relay rules: heard signal → send IR, wait, switch layer, press a TV key | Tested on the board with injected frames. A rule driving a real TV from a physical remote is **not yet confirmed** |
+| Custom web remotes, backup / restore | Working; tested on the board and in the browser |
+| Access header and encryption | Tested between the board and both a reference client and the web page (through a test bridge). **Not yet tried from a phone, Bluefy or an NFC tag** |
+| Web page | Automated tests run in a headless browser; **the real Web Bluetooth and Web Serial device pickers are not covered by them** |
 
 ## TV remote over Bluetooth
 
@@ -147,26 +150,39 @@ Web Serial (USB) needs desktop Chrome or Edge. Add `?demo=1` to try it with a si
 
 Typical use:
 
-1. **Record**: press *Start recording*, then press keys on any remote pointed at the receiver. Each new
-   key becomes a numbered draft with a waveform; pressing the same key again raises its counter.
+1. **Record** (*IR signals* tab): press *Start recording*, then press keys on any remote pointed at the receiver.
+   Each new key becomes a numbered draft with a waveform; pressing the same key again raises its counter.
+   *Test send* plays a draft right away.
 2. **Name**: type names (or paste a list, one per line, applied in recording order), pick the type and device,
-   press *Save named drafts*. Only named signals can be used.
-3. **Send**: the *Signals* tab has a *Send* button per appliance command, over Bluetooth or USB.
-4. **Rules**: *When I hear* a saved signal (for example a key on a spare remote), *then do* a list of steps.
+   press *Save named drafts*. Only named signals can be used in buttons and rules.
+3. **Send**: from *IR signals*, or from your own buttons on the *Remotes* tab.
+4. **Relay rules**: *When I hear* a saved signal (for example a key on a spare remote), *then do* a list of steps.
    Rules and signals can be disabled without deleting them.
+5. **Device**: TV pairing, Bluetooth access header, backup, settings, LED test and the device log.
 
 ## Command line tools
 
-For development. They need [pyserial](https://pypi.org/project/pyserial/) (and `bleak`, `websockets` for two of them).
+For development. They need [pyserial](https://pypi.org/project/pyserial/); some also need `bleak`, `websockets`
+or `cryptography`.
 
 ```sh
 export IRCAP_PORT=/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_<MAC>-if00
 
-python3 firmware/tools/selftest.py captures/tv.jsonl   # protocol test over USB (erases stored data!)
-python3 firmware/tools/blecheck.py                     # protocol test over Bluetooth
-python3 firmware/tools/bridge.py 8765                  # USB <-> WebSocket for testing the web page
+python3 firmware/tools/selftest.py          # record, name, send, rules, persistence; keeps your data
+python3 firmware/tools/relay_check.py       # "one press, one run" and TV-key rule steps
+python3 firmware/tools/ui_check.py          # remote layout storage (needs two empty slots)
+python3 firmware/tools/ledtest_check.py     # the LED test command
+python3 firmware/tools/burst_check.py       # commands sent back to back
+python3 firmware/tools/access_check.py      # access header and encryption (USB + this computer's Bluetooth)
+python3 firmware/tools/remote_check.py      # TV remote commands. WARNING: forgets the paired TV
+python3 firmware/tools/blecheck.py          # Bluetooth transfer (capsule without header, one saved signal)
+python3 firmware/tools/bridge.py 8765       # USB <-> WebSocket for testing the web page
 python3 firmware/tools/capture.py "$IRCAP_PORT" captures/tv.jsonl 60 tv   # log raw frames to a file
 ```
+
+Most of these send infrared or change stored data temporarily; read the description at the top of a tool before
+running it. A paired TV in range reconnects by itself, so anything that sends TV keys really controls it.
+`securelink.py` is a reference client for the encrypted Bluetooth protocol.
 
 The wire protocol is documented in [docs/protocol.md](docs/protocol.md). Opening the serial port reboots
 the board, so start tools after plugging in and wait a couple of seconds.
@@ -180,6 +196,9 @@ firmware/        ESP-IDF project
   main/store.c     flash storage (NVS)
   main/proto.c     command interpreter
   main/ble.c       GATT transport
+  main/secure.c    access header: handshake and encryption under the line protocol
+  main/remote.c    TV remote (BLE HID)
+  main/ui_store.c  storage of the custom web remotes
 firmware/tools/  host-side test and development tools (Python)
 web/index.html   configuration page (single static file)
 docs/wiring.html Schematic and assembly guide (self-contained, open in a browser)
@@ -197,7 +216,7 @@ docs/spec.zh-TW.md  Full design spec and discussion (Traditional Chinese)
 - **Air conditioners send their whole panel state in every frame** (mode, temperature, fan, ...). A recorded
   frame therefore sets the appliance to exactly the state it had when recorded. Record one signal per state you
   want (for example "Cool 26 °C", "Off"). Editing individual fields (temperature up/down) is not implemented.
-- Free heap after boot is about 85 KB (Bluetooth stack included). Storage holds 96 signals and 48 rules of up to
+- Free heap after boot is about 73 KB (Bluetooth stack included). Storage holds 96 signals and 48 rules of up to
   1200 entries each; flash is not the limit, RAM is.
 - Without an access header, anyone in Bluetooth range can connect, change settings, press keys on the paired TV
   and open the pairing window. Pairing itself is always accepted (Linux hosts require it), but key presses go only
@@ -206,4 +225,4 @@ docs/spec.zh-TW.md  Full design spec and discussion (Traditional Chinese)
 
 ## License
 
-Not chosen yet.
+[MIT](LICENSE).
