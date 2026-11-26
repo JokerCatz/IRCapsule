@@ -584,21 +584,30 @@ const TV_KEYS = [
   ["up2", "Up (2nd way)", "second"], ["down2", "Down (2nd way)", "second"], ["left2", "Left (2nd way)", "second"], ["right2", "Right (2nd way)", "second"],
 ];
 const recentKeys = () => S.logs.filter(l => /^tv: key/.test(l.m)).slice(-6).reverse().map(l => l.m.slice(4)).join("\n") || t("Nothing sent yet.");
-let tvBusy = false;
+let tvBusy = false, tvSeq = 0;
 async function pollTv() {
   if (!S.dev || tvBusy) return;
   tvBusy = true;
   const dev = S.dev;
+  const seq = tvSeq;
   let next;
-  try { const r = await dev.call("tv"); next = { paired: r.paired, connected: r.connected, window: r.window, compat: r.compat }; }
+  try { next = tvState(await dev.call("tv")); }
   catch (e) { next = /unknown cmd/.test(e.message) ? { unsupported: true } : S.tv; }
   tvBusy = false;
-  if (S.dev !== dev || JSON.stringify(next) === JSON.stringify(S.tv)) return;
+  if (S.dev === dev && seq === tvSeq) showTv(next);       // an action since this poll started has newer news
+}
+const tvState = r => ({ paired: r.paired, connected: r.connected, window: r.window, compat: r.compat });
+function showTv(next) {
+  if (JSON.stringify(next) === JSON.stringify(S.tv)) return;
   S.tv = next;
   if (S.tab === "tv") render();
 }
 setInterval(() => { if (S.dev && S.tab === "tv") pollTv(); }, 2000);
-async function tvOp(op, more) { await act(S.dev.call("tv", { op, ...more })); await pollTv(); }
+async function tvOp(op, more) {            // the reply already carries the new state: show it, do not wait for a poll
+  const dev = S.dev, r = await act(dev.call("tv", { op, ...more }));
+  tvSeq++;
+  if (S.dev === dev) showTv(tvState(r));
+}
 
 function renderTv() {
   const v = S.tv;
