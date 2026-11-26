@@ -197,6 +197,7 @@ void secure_link_open(uint16_t conn)
     LOCK();
     link_t *l = find(conn);
     if (l) release(l);
+    if (s_web == conn) s_web = BLE_HS_CONN_HANDLE_NONE;   /* subscribed again: it has to be accepted again */
     for (int i = 0; !l && i < LINKS; i++) if (!s_links[i].used) l = &s_links[i];
     if (l) {
         memset(l, 0, sizeof *l);
@@ -219,6 +220,27 @@ void secure_link_close(uint16_t conn)
 }
 
 void secure_mtu(uint16_t conn, int mtu) { if (conn == s_web) g_ble_mtu = mtu; }
+
+/* A new page may reuse the Bluetooth connection (no new subscribe event): its hello starts the link over.
+ * Lock held. */
+static void restart(link_t *l)
+{
+    if (s_web == l->conn) s_web = BLE_HS_CONN_HANDLE_NONE;
+    if (l->k_rx) psa_destroy_key(l->k_rx);
+    if (l->k_tx) psa_destroy_key(l->k_tx);
+    l->k_rx = l->k_tx = 0;
+    l->n_rx = l->n_tx = 0;
+    l->accepted = l->dead = l->have_nonce = false;
+    l->encrypted = s_header[0] != 0;
+    l->drop_at_us = 0;
+    l->opened_us = esp_timer_get_time();
+}
+
+static bool is_hello(const char *line)
+{
+    char cmd[8] = "";
+    return line[0] == '{' && js_str(line, "cmd", cmd, sizeof cmd) && !strcmp(cmd, "hello");
+}
 
 static void say(uint16_t conn, const char *s) { ble_send(conn, s, strlen(s)); }
 
@@ -309,6 +331,7 @@ void secure_rx(uint16_t conn, const uint8_t *data, size_t len)
         l->line[l->len] = 0;
         memcpy(line, l->line, l->len + 1);
         l->len = 0;
+        if (l->accepted && s_header[0] && is_hello(line)) restart(l);   /* e.g. a reloaded page */
         if (!l->accepted) {
             UNLOCK();
             handshake(conn, line);
@@ -324,6 +347,17 @@ void secure_rx(uint16_t conn, const uint8_t *data, size_t len)
         UNLOCK();
         if (conn == s_web) proto_feed(TR_BLE, plain, n);
     }
+}
+
+bool secure_hello_again(const char *line)
+{
+    uint16_t conn = s_web;
+    LOCK();
+    link_t *l = s_header[0] && conn != BLE_HS_CONN_HANDLE_NONE ? find(conn) : NULL;
+    if (l) restart(l);
+    UNLOCK();
+    if (l) handshake(conn, line);
+    return l != NULL;
 }
 
 bool secure_ready(void) { return s_web != BLE_HS_CONN_HANDLE_NONE; }

@@ -15,6 +15,7 @@ events, and every other line is answered with `locked`. The header itself is nev
 
 1. `{"q":1,"cmd":"hello"}` (plain) → `{"q":1,"ok":true,"enc":1,"s":<16-byte salt, hex>,"i":20000,"n":<16-byte nonce, hex>}`.
    `enc` 0 means the capsule is open: carry on in plain text. The salt changes when the header is set.
+   A `hello` on a connection that was already accepted (a reloaded page reusing it) locks it again while a header is set.
 2. Master key = `PBKDF2-HMAC-SHA256(header, salt, i, 32)`. Session keys =
    `HMAC-SHA256(master, label ‖ client nonce (16) ‖ capsule nonce (16))` with label `c2d` (to the capsule) and `d2c`.
    Cipher: AES-256-GCM, 16-byte tag, no additional data. IV = four zero bytes, then an 8-byte big-endian counter,
@@ -99,9 +100,9 @@ each entry may differ by 25 % or 150 µs, whichever is larger. If lengths differ
 at least 20 entries and the common prefix must match, so a frame that repeats its payload three or
 four times still matches.
 
-**One press, one run:** every full NEC frame is a press (a held NEC button only sends short repeat frames, which
-are ignored). For other formats a matching frame is a new press only after a quiet gap of at least `dedupe` ms
-since the previous matching frame, so holding a button never re-triggers. Up to 8 runs wait in the queue, and
+**One press, one run:** a matching frame is a new press only after a quiet gap since the previous matching frame,
+so holding a button never re-triggers. The gap is `dedupe` ms, except for NEC, where it is 150 ms (a held NEC
+button normally sends short repeat frames, which are ignored; some remotes resend the whole frame every ~108 ms). Up to 8 runs wait in the queue, and
 the receiver is deaf while the capsule itself is sending infrared.
 
 **Normalisation:** on long frames a VS1838B shortens marks and lengthens the following spaces by the

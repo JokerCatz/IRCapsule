@@ -13,6 +13,7 @@
 #include "transport.h"
 
 #define RING 6
+#define NEC_QUIET_US 150000
 #define LOGN 48
 
 static frame_t s_ring[RING];
@@ -212,12 +213,13 @@ void engine_on_frame(const uint16_t *raw_in, size_t n, int64_t t_us)
             if (store_sig_read_raw(r->trigger, tbuf, MAX_RAW, &tn) != ESP_OK) continue;
             if (!raw_match(raw, n, tbuf, tn)) continue;
             matched = r->id;
-            /* One press, one run. A held NEC button sends short repeat frames, which never get here, so each
-             * full NEC frame is a press. Other remotes resend the whole frame while held: a new press needs a
-             * quiet gap, measured from the last matching frame, so holding never re-triggers. */
+            /* One press, one run: a new press needs a quiet gap since the last matching frame, so holding never
+             * re-triggers. A held NEC button normally sends short repeat frames, which never get here, so NEC
+             * only needs a gap just over its 108 ms frame period (for remotes that resend the whole frame). */
             int64_t gap = t_us - s_last_match_us[i];
             s_last_match_us[i] = t_us;
-            if (strncmp(proto, "NEC ", 4) && gap < (int64_t)g_meta.dedupe_ms * 1000) break;
+            int64_t quiet = strncmp(proto, "NEC ", 4) ? (int64_t)g_meta.dedupe_ms * 1000 : NEC_QUIET_US;
+            if (gap < quiet) break;
             ilog("trigger \"%s\" -> rule \"%s\"", trig->name, r->name);
             engine_enqueue(JOB_RULE, r->id);
         }

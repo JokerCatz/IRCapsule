@@ -61,6 +61,17 @@ async def main():
         r = await l.call("info"); check("info reports no header", r and r.get("access") == 0, r)
         await l.close(); await pause(2)
 
+        # a new page may reuse the same Bluetooth connection: its hello must start over
+        await pause(1); l = await Link(dev).open()
+        r = await l.call("access", h=H1); check("open link sets a header", r and r["ok"], r)
+        r = await l.call("hello"); check("hello on that same connection asks for the header now", r and r.get("enc") == 1, r)
+        r = await l.call("info"); check("and the connection is locked until it authenticates", r and r.get("err") == "locked", r)
+        r = await l.auth(H1); check("it can authenticate on the same connection", r and r["ok"], (r, l.broken))
+        l.keys = None; l.plain = b""
+        r = await l.call("hello"); check("a plain hello on an encrypted connection starts over instead of closing it", r and r.get("enc") == 1 and not l.lost, r)
+        r = await l.auth(H1); check("and it can authenticate again", r and r["ok"] and (await l.call("ping")), (r, l.broken))
+        await l.close(); await pause(2); usb("access", h="")
+
         r = usb("access", h=H1); check("UART sets a header", r["ok"] and r["set"] == 1, r)
         r = usb("access"); check("UART reads it back", r.get("h") == H1, r)
         check("UART stays plain and unrestricted", usb("info")["ok"] and usb("info")["access"] == 1)

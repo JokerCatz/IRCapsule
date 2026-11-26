@@ -396,7 +396,11 @@ static void handle(const char *line, tr_id_t tr)
     if (!js_str(line, "cmd", cmd, sizeof cmd)) return reply_err(tr, q, "missing cmd");
 
     if (!strcmp(cmd, "ping")) reply_simple(tr, q, NULL);
-    else if (!strcmp(cmd, "hello")) reply_simple(tr, q, ",\"enc\":0");    /* an encrypted link never gets this far unproven */
+    else if (!strcmp(cmd, "hello")) {
+        /* Only open links and UART get here. Over Bluetooth with a header set it is a new page on an old
+         * plain connection: it must authenticate. */
+        if (!(tr == TR_BLE && secure_hello_again(line))) reply_simple(tr, q, ",\"enc\":0");
+    }
     else if (!strcmp(cmd, "access")) cmd_access(tr, q, line);
     else if (!strcmp(cmd, "info")) cmd_info(tr, q);
     else if (!strcmp(cmd, "list")) cmd_list(tr, q);

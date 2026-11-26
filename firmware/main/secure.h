@@ -21,6 +21,8 @@ void secure_link_open(uint16_t conn);                     /* the link subscribed
 void secure_link_close(uint16_t conn);                    /* unsubscribed or disconnected */
 void secure_rx(uint16_t conn, const uint8_t *data, size_t len);
 void secure_mtu(uint16_t conn, int mtu);
+/* A plain-text open link sent hello although a header is now set: lock it and answer. false if not so. */
+bool secure_hello_again(const char *line);
 
 /* the accepted link, if any */
 bool secure_ready(void);

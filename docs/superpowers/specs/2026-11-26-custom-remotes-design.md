@@ -59,7 +59,8 @@ The 8-step limit stays. `key` stays as it is, so the page sends keys by page and
 
 **One press, one run (decided by the user).** Holding a physical button runs its rule once; pressing it N
 times runs it N times. How a press is told from a hold (builder's call):
-- NEC: every full frame is a new press (held NEC buttons send short repeat frames, already dropped).
+- NEC: held buttons normally send short repeat frames, already dropped; full frames count as separate presses
+  after a 150 ms quiet gap, so a remote that resends them while held does not re-trigger.
 - Other formats: a matching frame is a new press only after a quiet gap of at least the ignore-repeats time
   (default 400 ms, adjustable) since the previous matching frame, dropped ones included. So holding never
   re-triggers; two presses closer than the gap count as one.
