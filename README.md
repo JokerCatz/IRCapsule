@@ -54,6 +54,14 @@ Pair only after pressing the button. If the TV paired earlier, remove the capsul
 The page and the TV can be connected at the same time by design (not yet tested with two real devices).
 Waking a TV from standby this way should not be relied on.
 
+## Backup and restore
+
+**Device** tab. **Export backup** saves signals (drafts included), waveforms, rules, devices and the settings
+(name, repeat-ignore time, layer) as one JSON file. **Restore from backup replaces** what is on the capsule
+with the file: it is validated first, your current data is downloaded, you are asked to confirm, and the result
+is read back and compared. If the link drops in the middle, import the same file again. The TV pairing and
+draft press counters are not part of a backup. A changed name applies after a reboot.
+
 ## Config page
 
 Hosted with GitHub Pages: <https://jokercatz.github.io/IRCapsule/> ([demo without a device](https://jokercatz.github.io/IRCapsule/?demo=1),
