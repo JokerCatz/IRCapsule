@@ -34,7 +34,7 @@ spare remote (code your appliances ignore) ──IR──▶ [VS1838B ×1–4] �
 |---|---|
 | Record: continuous capture, numbered drafts, press counter, batch naming | Working, tested end to end |
 | Signals: saved in flash with name, type, device, active/disabled state | Working, survives reboot |
-| Rules: heard signal → list of steps (send, wait, switch layer), enable/disable | Working |
+| Rules: heard signal → list of steps (send IR, wait, switch layer, TV key), enable/disable | Working |
 | Web config page (Bluetooth, USB serial, demo) with waveform view, log, backup | Working; tested against real firmware through a bridge and in demo mode. **Web Bluetooth and Web Serial pickers are not exercised by automated tests** |
 | Receiver artifact repair for A/C frames | Working |
 | RMT transmit with hardware carrier, self-reception guard | Implemented. **Not yet verified on a real appliance** |
@@ -42,34 +42,49 @@ spare remote (code your appliances ignore) ──IR──▶ [VS1838B ×1–4] �
 
 ## TV remote over Bluetooth
 
-For TV functions that have no infrared code (many Android / Google TV remotes send only Power as infrared),
-the capsule pairs with the TV as a Bluetooth remote (HID over GATT): direction keys, OK, Back, Home, volume,
-media keys, input source, settings and more, long presses, and any other consumer or keyboard code typed into
-the page. **Pairing was confirmed on one Android TV; which keys that TV acts on is still being collected.**
-Whether a key works depends on the TV.
+For TV functions that have no infrared code, the capsule pairs with an Android / Google TV as a Bluetooth remote
+(HID over GATT). Confirmed by the author on one TCL Android TV: directions, OK, Back, Home, Input source, TV
+settings, volume, playback keys, YouTube, Netflix and Power (off). Rewind / fast forward did nothing there; other
+keys are untested. Waking a TV from standby should not be relied on.
 
-1. Open the config page, tab **TV remote**, press **Pair a TV**.
-2. Within 120 s, add a Bluetooth accessory on the TV and choose `IRCapsule-XXXX`. Use the TV's general
-   accessory list: its pairing screen for its own remote (hold Home + OK) looks for that remote only.
-3. The page shows **TV connected**. The pairing survives reboots and a normal `idf.py flash`.
+**About the Bluetooth ids:** the capsule always reports the vendor/product id of **Google's reference remote**
+(`0957:0001`), because Android picks its key layout
+([`Vendor_0957_Product_0001.kl`](https://android.googlesource.com/platform/frameworks/base/+/main/data/keyboards/Vendor_0957_Product_0001.kl))
+by it. This project is not a Google product, is not certified by Google, and should not be shipped as a product
+with these ids. It does not pass a TV's pairing screen for its own remote: use the general accessory list.
 
-Pair only after pressing the button. If the TV paired earlier, remove the capsule on the TV and start again.
-The page and the TV can be connected at the same time. Waking a TV from standby this way should not be relied on.
+Pairing: page → **Device** → **Pair a TV**, then within 120 s add the capsule on the TV. Pair only after pressing
+the button. The pairing survives reboots and a normal `idf.py flash`.
 
-**Compatibility mode** (off by default). Android picks a key layout by the Bluetooth vendor/product id. Some
-keys, such as Input source, are mapped in the layout of Google's reference remote
-([`Vendor_0957_Product_0001.kl`](https://android.googlesource.com/platform/frameworks/base/+/main/data/keyboards/Vendor_0957_Product_0001.kl)).
-This switch makes the capsule report those ids so you can try that with your own TV. It does not make the
-capsule a Google product or certified in any way, and it does not pass a TV's own remote-pairing screen. The
-TV has to pair again after switching. No direct "HDMI 1/2/3" key is provided; use Input source and the arrows.
+## Custom remotes and relay
+
+* **Remotes** tab: up to 8 remotes stored on the capsule, 3 columns by up to 12 rows. Each button has a label,
+  one of 32 colours, and an action: a TV key (short or long press), a saved IR signal, or "run a rule" (a rule
+  without a trigger works as a macro). A button can repeat while held, at 150–1000 ms.
+* **Relay rules**: a signal heard from a physical remote runs steps: send IR, wait, switch layer, **press a TV
+  key**. One press runs a rule once; holding the button does not repeat it.
+
+## Access header (recommended)
+
+Anyone in Bluetooth range can use a capsule without one. Set it on the page (**Device** → **Bluetooth access**) or
+over USB. With it, the page proves it knows the header and everything is encrypted (AES-GCM); the header is not
+sent. The page shows a URL such as `https://…/#h=<header>&n=<bluetooth name>` for an **NFC tag**: opening it fills
+in the header (the part after `#` is never sent to the web server; the browser may keep it in its history). Web
+Bluetooth still needs a tap on **Bluetooth** and picking the device. USB never needs the header and can reset it.
+
+What it does not do: whoever has the header or the tag can get in; a short or guessable header can be guessed
+from recorded traffic (use the 22 random characters the page offers); a header that leaks later also opens old
+recordings; setting it over a still-open Bluetooth link sends it unencrypted that one time; it does not stop
+scanning, occupying connections, pairing or jamming. To be less obvious, give the capsule your own Bluetooth name;
+the project's service id is not advertised, but the TV remote service has to be.
 
 ## Backup and restore
 
-**Device** tab. **Export backup** saves signals (drafts included), waveforms, rules, devices and the settings
-(name, repeat-ignore time, layer) as one JSON file. **Restore from backup replaces** what is on the capsule
+**Device** tab. **Export backup** saves signals (drafts included), waveforms, rules, devices, custom remotes
+and the settings (name, repeat-ignore time, layer) as one JSON file. **Restore from backup replaces** what is on the capsule
 with the file: it is validated first, your current data is downloaded, you are asked to confirm, and the result
-is read back and compared. If the link drops in the middle, import the same file again. The TV pairing and
-draft press counters are not part of a backup. A changed name applies after a reboot.
+is read back and compared. If the link drops in the middle, import the same file again. The TV pairing, the access
+header and draft press counters are not part of a backup. A changed name applies after a reboot.
 
 ## Config page
 
@@ -184,9 +199,9 @@ docs/spec.zh-TW.md  Full design spec and discussion (Traditional Chinese)
   want (for example "Cool 26 °C", "Off"). Editing individual fields (temperature up/down) is not implemented.
 - Free heap after boot is about 85 KB (Bluetooth stack included). Storage holds 96 signals and 48 rules of up to
   1200 entries each; flash is not the limit, RAM is.
-- Anyone in Bluetooth range can connect, change settings and press keys on the paired TV: the config page
-  needs no pairing or PIN. Pairing is always accepted (Linux hosts require it), but key presses go only to the
-  TV chosen during the pairing window, which anyone in range can open.
+- Without an access header, anyone in Bluetooth range can connect, change settings, press keys on the paired TV
+  and open the pairing window. Pairing itself is always accepted (Linux hosts require it), but key presses go only
+  to the TV chosen during the pairing window.
 - Only record and replay remotes for devices you own or are allowed to control.
 
 ## License

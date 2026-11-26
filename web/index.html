@@ -273,8 +273,9 @@ class BleLink extends Link {
     this.onLine = () => {};
   }
   async _pieces(bytes) {
-    for (let i = 0; i < bytes.length; i += this.chunk) {
-      const part = bytes.slice(i, i + this.chunk);
+    const size = this.chunk;      /* setMtu() may run while we are writing: a new size must not skip bytes */
+    for (let i = 0; i < bytes.length; i += size) {
+      const part = bytes.slice(i, i + size);
       if (this.rxc.writeValueWithResponse) await this.rxc.writeValueWithResponse(part); else await this.rxc.writeValue(part);
     }
   }
@@ -437,7 +438,14 @@ class Device {
     this.pending.delete(m.q); clearTimeout(p.timer);
     if (m.ok) p.res(m); else { const e = new Error(m.err || "error"); e.reply = m; p.rej(e); }
   }
+  /* One command at a time: the capsule's queue is short, and its replies come in order anyway. */
   call(cmd, args = {}, timeout = 20000) {
+    const run = () => this._call(cmd, args, timeout);
+    const result = (this.turn || Promise.resolve()).then(run, run);
+    this.turn = result.catch(() => {});
+    return result;
+  }
+  _call(cmd, args, timeout) {
     const q = ++this.q;
     return new Promise((res, rej) => {
       const timer = setTimeout(() => { this.pending.delete(q); rej(new Error("timeout: " + cmd)); }, timeout);

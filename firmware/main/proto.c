@@ -499,7 +499,9 @@ void proto_feed(tr_id_t tr, const uint8_t *data, size_t len)
             if (s_len[tr]) {
                 s_buf[tr][s_len[tr]] = 0;
                 msg_t m = { .line = strdup(s_buf[tr]), .tr = tr };
-                if (!m.line || xQueueSend(s_q, &m, 0) != pdTRUE) free(m.line);
+                /* USB can be held back until there is room; the Bluetooth host task must not wait */
+                TickType_t wait = tr == TR_USB ? pdMS_TO_TICKS(10000) : 0;
+                if (!m.line || xQueueSend(s_q, &m, wait) != pdTRUE) free(m.line);
             }
             s_len[tr] = 0;
             continue;
@@ -514,6 +516,6 @@ void proto_reset(tr_id_t tr) { s_len[tr] = 0; }
 void proto_init(void)
 {
     for (int i = 0; i < TR_COUNT; i++) s_buf[i] = malloc(LINE_MAX_LEN);
-    s_q = xQueueCreate(4, sizeof(msg_t));
+    s_q = xQueueCreate(16, sizeof(msg_t));
     xTaskCreate(worker, "proto", 8192, NULL, 4, NULL);
 }
