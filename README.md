@@ -43,16 +43,25 @@ spare remote (code your appliances ignore) ──IR──▶ [VS1838B ×1–4] �
 ## TV remote over Bluetooth
 
 For TV functions that have no infrared code (many Android / Google TV remotes send only Power as infrared),
-the capsule can pair with the TV as a Bluetooth remote (HID over GATT): direction keys, OK, Back, volume
-and mute. **Tested only with a Linux PC standing in for the TV; not yet confirmed on a real TV.**
+the capsule pairs with the TV as a Bluetooth remote (HID over GATT): direction keys, OK, Back, Home, volume,
+media keys, input source, settings and more, long presses, and any other consumer or keyboard code typed into
+the page. **Pairing was confirmed on one Android TV; which keys that TV acts on is still being collected.**
+Whether a key works depends on the TV.
 
 1. Open the config page, tab **TV remote**, press **Pair a TV**.
-2. Within 120 s, add a Bluetooth accessory on the TV and choose `IRCapsule-XXXX`.
-3. The page shows **TV connected**. The pairing survives reboots.
+2. Within 120 s, add a Bluetooth accessory on the TV and choose `IRCapsule-XXXX`. Use the TV's general
+   accessory list: its pairing screen for its own remote (hold Home + OK) looks for that remote only.
+3. The page shows **TV connected**. The pairing survives reboots and a normal `idf.py flash`.
 
 Pair only after pressing the button. If the TV paired earlier, remove the capsule on the TV and start again.
-The page and the TV can be connected at the same time by design (not yet tested with two real devices).
-Waking a TV from standby this way should not be relied on.
+The page and the TV can be connected at the same time. Waking a TV from standby this way should not be relied on.
+
+**Compatibility mode** (off by default). Android picks a key layout by the Bluetooth vendor/product id. Some
+keys, such as Input source, are mapped in the layout of Google's reference remote
+([`Vendor_0957_Product_0001.kl`](https://android.googlesource.com/platform/frameworks/base/+/main/data/keyboards/Vendor_0957_Product_0001.kl)).
+This switch makes the capsule report those ids so you can try that with your own TV. It does not make the
+capsule a Google product or certified in any way, and it does not pass a TV's own remote-pairing screen. The
+TV has to pair again after switching. No direct "HDMI 1/2/3" key is provided; use Input source and the arrows.
 
 ## Backup and restore
 

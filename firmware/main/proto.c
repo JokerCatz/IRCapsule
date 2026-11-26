@@ -279,7 +279,7 @@ static void cmd_log(tr_id_t tr, long q)
     tr_end(tr, &o);
 }
 
-/* The paired TV (BLE remote). op: status (default), pair, cancel, forget. */
+/* The paired TV (BLE remote). op: status (default), pair, cancel, forget, compat (on=0/1). */
 static void cmd_tv(tr_id_t tr, long q, const char *line)
 {
     char op[12] = "status";
@@ -287,10 +287,14 @@ static void cmd_tv(tr_id_t tr, long q, const char *line)
     if (!strcmp(op, "pair")) remote_pair(true);
     else if (!strcmp(op, "cancel")) remote_pair(false);
     else if (!strcmp(op, "forget")) remote_forget();
-    else if (strcmp(op, "status")) return reply_err(tr, q, "unknown op");
+    else if (!strcmp(op, "compat")) {
+        long on;
+        if (!js_int(line, "on", &on)) return reply_err(tr, q, "on required");
+        remote_set_compat(on != 0);
+    } else if (strcmp(op, "status")) return reply_err(tr, q, "unknown op");
     bool paired, connected; int window;
     remote_status(&paired, &connected, &window);
-    char extra[64]; snprintf(extra, sizeof extra, ",\"paired\":%d,\"connected\":%d,\"window\":%d", paired, connected, window);
+    char extra[80]; snprintf(extra, sizeof extra, ",\"paired\":%d,\"connected\":%d,\"window\":%d,\"compat\":%d", paired, connected, window, remote_compat());
     reply_simple(tr, q, extra);
 }
 
@@ -331,9 +335,17 @@ static void handle(const char *line, tr_id_t tr)
     } else if (!strcmp(cmd, "tv")) {
         cmd_tv(tr, q, line);
     } else if (!strcmp(cmd, "key")) {
-        char k[12] = "";
-        js_str(line, "k", k, sizeof k);
-        const char *err = remote_key(k);
+        /* {k} sends a named key, {page,code} any code; ms is how long it is held down */
+        char k[12] = "", page[4] = "";
+        long code = 0, ms = REMOTE_KEY_MS;
+        js_int(line, "ms", &ms);
+        const char *err;
+        if (js_str(line, "k", k, sizeof k)) err = remote_key(k, (int)ms);
+        else {
+            js_str(line, "page", page, sizeof page);
+            js_int(line, "code", &code);
+            err = remote_raw(page, code, (int)ms);
+        }
         err ? reply_err(tr, q, err) : reply_simple(tr, q, NULL);
     } else if (!strcmp(cmd, "ledtest")) {
         v = 1; js_int(line, "on", &v);
@@ -361,6 +373,7 @@ static void handle(const char *line, tr_id_t tr)
         reply_simple(tr, q, NULL);
     } else if (!strcmp(cmd, "reset")) {
         if (!js_int(line, "confirm", &v) || !v) return reply_err(tr, q, "confirm required");
+        remote_set_compat(false);
         remote_forget();
         store_factory_reset();
         ilog("factory reset");

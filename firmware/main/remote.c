@@ -30,15 +30,39 @@ static const uint8_t REPORT_MAP[] = {
 #define KBD_LEN 8
 #define CC_LEN  2
 
+#define KB 1                 /* report 1: keyboard page */
+#define CC 2                 /* report 2: consumer page */
 typedef struct { const char *name; uint8_t report; uint16_t code; } key_def_t;
+/* Which of these a TV acts on depends on its Android key layout, which Android picks by vendor/product id. */
 static const key_def_t KEYS[] = {
-    { "up",      1, 0x52 }, { "down",    1, 0x51 }, { "left", 1, 0x50 }, { "right", 1, 0x4F },
-    { "ok",      1, 0x28 },   /* keyboard Enter */
-    { "ok2",     2, 0x0041 }, /* consumer Menu Pick */
-    { "back",    2, 0x0224 }, /* consumer AC Back */
-    { "back2",   1, 0x29 },   /* keyboard Escape */
-    { "volup",   2, 0x00E9 }, { "voldown", 2, 0x00EA }, { "mute", 2, 0x00E2 },
+    { "up",     KB, 0x52 }, { "down",   KB, 0x51 }, { "left",   KB, 0x50 }, { "right",  KB, 0x4F },
+    { "up2",    CC, 0x42 }, { "down2",  CC, 0x43 }, { "left2",  CC, 0x44 }, { "right2", CC, 0x45 },
+    { "ok",     KB, 0x28 },       /* keyboard Enter */
+    { "ok2",    CC, 0x0041 },     /* Menu Pick */
+    { "back",   CC, 0x0224 },     /* AC Back */
+    { "back2",  KB, 0x29 },       /* keyboard Escape */
+    { "home",   CC, 0x0223 },     /* AC Home */
+    { "input",  CC, 0x01BB },     /* TV_INPUT in the layout of Google's remote: needs compatibility mode */
+    { "input2", CC, 0x0089 },     /* Media Select TV */
+    { "settings",  CC, 0x0096 },  /* SETTINGS in the layout of Google's remote */
+    { "settings2", CC, 0x019F },  /* SETTINGS in Android's generic layout */
+    { "menu",   CC, 0x0040 },     { "menu2",  KB, 0x65 },
+    { "search", CC, 0x0221 },     { "guide",  CC, 0x008D },   { "info",  CC, 0x0060 },
+    { "chup",   CC, 0x009C },     { "chdown", CC, 0x009D },
+    { "volup",  CC, 0x00E9 },     { "voldown", CC, 0x00EA },  { "mute",  CC, 0x00E2 },
+    { "playpause", CC, 0x00CD },  { "stop",   CC, 0x00B7 },
+    { "rew",    CC, 0x00B4 },     { "ffwd",   CC, 0x00B3 },
+    { "prev",   CC, 0x00B6 },     { "next",   CC, 0x00B5 },
+    { "power",  CC, 0x0030 },
+    { "youtube", CC, 0x0077 },    { "netflix", CC, 0x0078 },  /* Google remote layout */
 };
+
+/* PnP ID of the Device Information service: source 2 (USB), vendor, product, version, little endian.
+ * Own: the shared V-USB ids. Compatibility mode (off by default) reports the ids of Google's reference
+ * remote, so that Android applies that remote's key layout. It does not make this a Google device. */
+static const uint8_t PNP_OWN[]    = { 0x02, 0xC0, 0x16, 0xDF, 0x05, 0x00, 0x01 };
+static const uint8_t PNP_COMPAT[] = { 0x02, 0x57, 0x09, 0x01, 0x00, 0x01, 0x00 };
+static volatile bool s_compat;
 
 static ble_addr_t s_tv;              /* identity address of the paired TV */
 static bool s_has_tv;
@@ -57,7 +81,6 @@ static int hid_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt 
     static const uint8_t ref_kbd[] = { 1, 1 }, ref_cc[] = { 2, 1 };   /* report id, input */
     static const uint8_t zero[KBD_LEN] = { 0 };
     static const uint8_t battery = 100;
-    static const uint8_t pnp[] = { 0x02, 0xC0, 0x16, 0xDF, 0x05, 0x00, 0x01 };  /* USB 16C0:05DF (shared V-USB ids) */
     static const char manuf[] = "IRCapsule";
     if (c->op == BLE_GATT_ACCESS_OP_WRITE_CHR) return 0;               /* control point, protocol mode */
     const void *p = NULL; size_t n = 0;
@@ -70,7 +93,7 @@ static int hid_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt 
     case A_KBD_REF: p = ref_kbd; n = 2; break;
     case A_CC_REF:  p = ref_cc; n = 2; break;
     case A_BATT:    p = &battery; n = 1; break;
-    case A_PNP:     p = pnp; n = sizeof pnp; break;
+    case A_PNP:     p = s_compat ? PNP_COMPAT : PNP_OWN; n = sizeof PNP_OWN; break;
     case A_MANUF:   p = manuf; n = sizeof manuf - 1; break;
     default: return BLE_ATT_ERR_UNLIKELY;
     }
@@ -146,8 +169,23 @@ void remote_init(void)
     if (nvs_open("tvremote", NVS_READONLY, &h) == ESP_OK) {
         size_t n = sizeof s_tv;
         s_has_tv = nvs_get_blob(h, "peer", &s_tv, &n) == ESP_OK && n == sizeof s_tv;
+        uint8_t compat = 0;
+        nvs_get_u8(h, "compat", &compat);
+        s_compat = compat != 0;
         nvs_close(h);
     }
+}
+
+bool remote_compat(void) { return s_compat; }
+
+void remote_set_compat(bool on)
+{
+    if (on == s_compat) return;
+    s_compat = on;
+    nvs_handle_t h;
+    if (nvs_open("tvremote", NVS_READWRITE, &h) == ESP_OK) { nvs_set_u8(h, "compat", on); nvs_commit(h); nvs_close(h); }
+    ilog("tv: compatibility mode %s", on ? "on" : "off");
+    remote_forget();          /* a TV reads the ids when it pairs, so it has to pair again */
 }
 
 bool remote_is_tv(uint16_t conn)
@@ -226,22 +264,36 @@ static int notify(uint16_t conn, uint16_t handle, const uint8_t *buf, size_t n)
     return om ? ble_gatts_notify_custom(conn, handle, om) : BLE_HS_ENOMEM;
 }
 
-const char *remote_key(const char *name)
+static const char *press(uint8_t report, uint16_t code, const char *label, int hold_ms)
 {
-    const key_def_t *k = NULL;
-    for (size_t i = 0; i < sizeof KEYS / sizeof KEYS[0]; i++) if (!strcmp(KEYS[i].name, name)) k = &KEYS[i];
-    if (!k) return "unknown key";
+    if (hold_ms < 1 || hold_ms > REMOTE_MAX_HOLD_MS) return "bad hold time";
     uint16_t conn = s_tv_conn;
     if (conn == BLE_HS_CONN_HANDLE_NONE) return "TV not connected";
     uint8_t down[KBD_LEN] = { 0 }, up[KBD_LEN] = { 0 };
-    size_t n = k->report == 1 ? KBD_LEN : CC_LEN;
-    uint16_t handle = k->report == 1 ? s_kbd_handle : s_cc_handle;
-    if (k->report == 1) down[2] = (uint8_t)k->code;
-    else { down[0] = k->code & 0xff; down[1] = k->code >> 8; }
+    size_t n = report == KB ? KBD_LEN : CC_LEN;
+    uint16_t handle = report == KB ? s_kbd_handle : s_cc_handle;
+    if (report == KB) down[2] = (uint8_t)code;
+    else { down[0] = code & 0xff; down[1] = code >> 8; }
     int a = notify(conn, handle, down, n);
-    vTaskDelay(pdMS_TO_TICKS(40));
+    vTaskDelay(pdMS_TO_TICKS(hold_ms));
     int b = notify(conn, handle, up, n);
     if (a || b) { vTaskDelay(pdMS_TO_TICKS(40)); b = notify(conn, handle, up, n); }   /* never leave a key down */
-    ilog("tv: key %s %s", k->name, !a && !b ? "sent" : "ERROR");
+    /* the code is logged so that a user's report tells exactly what was tried */
+    ilog("tv: key %s (%s 0x%X%s%s) %s", label, report == KB ? "kb" : "cc", code, hold_ms >= 500 ? " held" : "",
+         s_compat ? " compat" : "", !a && !b ? "sent" : "ERROR");
     return !a && !b ? NULL : "send failed";
+}
+
+const char *remote_key(const char *name, int hold_ms)
+{
+    for (size_t i = 0; i < sizeof KEYS / sizeof KEYS[0]; i++)
+        if (!strcmp(KEYS[i].name, name)) return press(KEYS[i].report, KEYS[i].code, name, hold_ms);
+    return "unknown key";
+}
+
+const char *remote_raw(const char *page, long code, int hold_ms)
+{
+    bool kb = !strcmp(page, "kb");
+    if ((!kb && strcmp(page, "cc")) || code < 1 || code > (kb ? 0xFF : 0x3FF)) return "bad key code";   /* report map limits */
+    return press(kb ? KB : CC, (uint16_t)code, "raw", hold_ms);
 }

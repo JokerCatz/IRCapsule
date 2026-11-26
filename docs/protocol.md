@@ -54,8 +54,8 @@ used in a rule. Naming a draft and setting `state` to 1 makes it usable.
 | `fire` | `id` | Queue a send of an active signal. |
 | `run` | `id` | Run a rule's steps now. |
 | `play` | `khz`, `raw` | Send raw timings (debug). |
-| `tv` | `op`: `status` (default), `pair`, `cancel`, `forget` | `paired`, `connected`, `window` (seconds left). `pair` opens a 120 s window: a peer that pairs anew during it becomes the TV. Logs start with `tv:`. |
-| `key` | `k`: `up` `down` `left` `right` `ok` `back` `volup` `voldown` `mute`; `ok2` / `back2` are alternative codes | Press and release on the paired TV. Errors: `unknown key`, `TV not connected`, `send failed`. `ok` = keyboard Enter, `ok2` = consumer Menu Pick, `back` = consumer AC Back, `back2` = keyboard Escape. |
+| `tv` | `op`: `status` (default), `pair`, `cancel`, `forget`, `compat` (`on` 0/1) | `paired`, `connected`, `window` (seconds left), `compat`. `pair` opens a 120 s window: a peer that pairs anew during it becomes the TV. `compat` 1 makes the PnP ID that of Google's reference remote (`0957:0001`) instead of `16C0:05DF`; stored, off by default, changing it forgets the TV. Logs start with `tv:`. |
+| `key` | `k` (a name), or `page` (`cc` consumer, `kb` keyboard) with `code`; optional `ms` hold time 1–3000 (default 40) | Press and release on the paired TV. Names: `up down left right ok back home input settings voldown mute volup prev rew playpause ffwd next stop menu search guide info chup chdown power youtube netflix`, alternative codes `ok2 back2 input2 settings2 menu2 up2 down2 left2 right2` (the codes are in `firmware/main/remote.c`). `code`: 1–0x3FF consumer, 1–0xFF keyboard. Every press is logged with its code. Errors: `unknown key`, `bad key code`, `bad hold time`, `TV not connected`, `send failed`. |
 | `ledtest` | `on` (0/1, default 1) | Hardware check: all IR LEDs blink 0.5 s on, 0.5 s off, without carrier. Ends on `on`=0 or after 60 s (`on`=1 again restarts the 60 s). Other sends wait until it ends, and rules do not fire during it. Logs `led test on` / `led test off`. |
 | `layer` | `n` | `layer` |
 | `set` | `name` (BLE name, after reboot), `dedupe` (ms) | |

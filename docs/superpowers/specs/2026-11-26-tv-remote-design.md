@@ -14,3 +14,9 @@ own HID service in `remote.c` (chosen).
 - Pairing is always accepted. Refusing it was tried first: a Linux host then dropped the whole link.
 - A peer becomes the TV only by a new pairing inside the 120 s window. Keys go only to it.
 - Bonds are stored in NVS; when storage is full a peer other than the TV is dropped.
+
+**Added after pairing worked on the real TV (approved):** more keys, long press, any typed code (so that new codes
+need no reflash), and a compatibility mode, off by default, that reports Google's reference remote ids because
+Android maps Input source only in that remote's key layout. Approaches for HDMI switching: copy the original
+remote's pairing (not documented by anyone found, rejected), ADB over Wi-Fi (needs networking, not now), Input
+source key plus arrows (chosen; a one-button macro can follow once the TV's behaviour is known).
