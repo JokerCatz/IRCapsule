@@ -72,11 +72,13 @@ bool ble_send(uint16_t conn, const char *d, size_t n)
     while (n) {
         size_t k = n < chunk ? n : chunk;
         int rc = BLE_HS_ENOMEM;
-        for (int tries = 0; tries < 200 && rc == BLE_HS_ENOMEM; tries++) {
+        /* Out of buffers is normal while a long reply drains: wait a whole tick at a time (a delay shorter
+         * than a tick is no delay at all), up to 2 s. The host task must not wait long: it frees the buffers. */
+        int limit = ble_in_host_task() ? 3 : 200;
+        for (int tries = 0; tries < limit && rc == BLE_HS_ENOMEM; tries++) {
             struct os_mbuf *om = ble_hs_mbuf_from_flat(d, k);
-            if (!om) { vTaskDelay(pdMS_TO_TICKS(5)); continue; }
-            rc = ble_gatts_notify_custom(conn, s_tx_handle, om);   /* consumes om */
-            if (rc == BLE_HS_ENOMEM) vTaskDelay(pdMS_TO_TICKS(5));
+            if (om) rc = ble_gatts_notify_custom(conn, s_tx_handle, om);   /* consumes om */
+            if (rc == BLE_HS_ENOMEM) vTaskDelay(1);
         }
         if (rc != 0) return false;
         d += k; n -= k;

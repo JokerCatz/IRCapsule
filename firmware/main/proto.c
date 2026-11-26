@@ -313,10 +313,22 @@ static void cmd_tv(tr_id_t tr, long q, const char *line)
 
 /* Custom remotes. The bytes travel as base64, so the flat line parser never has to look inside them. */
 #define UI_B64_MAX (4 * ((UI_CAP + 2) / 3))
+static void ui_command(tr_id_t tr, long q, const char *cmd, const char *line, uint8_t *blob, char *b64, size_t b64cap);
+
+/* the two buffers are only needed while a remote is being moved: not worth 10 KB of RAM all the time */
 static void cmd_ui(tr_id_t tr, long q, const char *cmd, const char *line)
 {
-    static uint8_t blob[UI_CAP];
-    static char b64[UI_B64_MAX + 8];                 /* one spare group, so that too long input is seen */
+    size_t cap = UI_B64_MAX + 8;                     /* one spare group, so that too long input is seen */
+    uint8_t *blob = malloc(UI_CAP);
+    char *b64 = malloc(cap);
+    if (blob && b64) ui_command(tr, q, cmd, line, blob, b64, cap);
+    else reply_err(tr, q, "out of memory");
+    free(blob);
+    free(b64);
+}
+
+static void ui_command(tr_id_t tr, long q, const char *cmd, const char *line, uint8_t *blob, char *b64, size_t b64cap)
+{
     if (!strcmp(cmd, "ui_list")) {
         out_t o; tr_begin(tr, &o);
         out_printf(&o, "{\"q\":%ld,\"ok\":true,\"max\":%d,\"cap\":%d,\"slots\":[", q, UI_SLOTS, UI_CAP);
@@ -339,18 +351,18 @@ static void cmd_ui(tr_id_t tr, long q, const char *cmd, const char *line)
         return reply_simple(tr, q, NULL);
     }
     if (!strcmp(cmd, "ui_put")) {
-        if (!js_str(line, "data", b64, sizeof b64)) return reply_err(tr, q, "bad data");
+        if (!js_str(line, "data", b64, b64cap)) return reply_err(tr, q, "bad data");
         size_t len = strlen(b64), n = 0;
         if (len > UI_B64_MAX) return reply_err(tr, q, "too big");      /* js_str cuts long input: never store that */
-        int rc = mbedtls_base64_decode(blob, sizeof blob, &n, (const unsigned char *)b64, len);
+        int rc = mbedtls_base64_decode(blob, UI_CAP, &n, (const unsigned char *)b64, len);
         if (rc == MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) return reply_err(tr, q, "too big");
         if (rc || !n || len % 4) return reply_err(tr, q, "bad data");
         if (ui_put((int)slot, blob, n) != ESP_OK) return reply_err(tr, q, "flash write failed");
         return reply_simple(tr, q, NULL);
     }
     size_t n = 0, olen = 0;
-    if (!ui_size((int)slot) || ui_get((int)slot, blob, sizeof blob, &n) != ESP_OK) return reply_err(tr, q, "no such remote");
-    if (mbedtls_base64_encode((unsigned char *)b64, sizeof b64, &olen, blob, n)) return reply_err(tr, q, "no data");
+    if (!ui_size((int)slot) || ui_get((int)slot, blob, UI_CAP, &n) != ESP_OK) return reply_err(tr, q, "no such remote");
+    if (mbedtls_base64_encode((unsigned char *)b64, b64cap, &olen, blob, n)) return reply_err(tr, q, "no data");
     out_t o; tr_begin(tr, &o);
     out_printf(&o, "{\"q\":%ld,\"ok\":true,\"slot\":%ld,\"data\":\"", q, slot);
     out_puts(&o, b64);

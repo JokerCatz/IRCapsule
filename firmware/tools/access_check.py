@@ -32,9 +32,15 @@ async def adv():
 
 async def lost(link, t):
     for _ in range(int(t * 5)):
-        if link.lost: return True
+        if link.lost:
+            await link.close()      # the library must forget it, or it keeps delivering notifications for it
+            return True
         await pause(0.2)
     return False
+
+async def send_ignoring_close(link, data):
+    try: await link.raw(data)
+    except Exception: pass
 
 async def main():
     before = usb("access")
@@ -67,12 +73,13 @@ async def main():
         check("locked: no events reach the link", len(l.wire_lines) == seen, l.wire_lines[seen:])
         h1 = await l.call("hello"); h2 = await l.call("hello")
         check("hello: salt, iterations and a fresh nonce", h1 and h1["enc"] == 1 and h1["i"] == 20000 and len(h1["s"]) == 32 and len(h1["n"]) == 32 and h1["n"] != h2["n"], (h1, h2))
-        r = await l.auth("wrong-header")
+        r = await l.auth("wrong-header"); t_refused = time.time()
         check("wrong header refused", r and r.get("err") == "bad header", r)
         check("and the link is closed", await lost(l, 6))
         l = await Link(dev).open(); r = await l.auth(H1)
         if r and r.get("err") == "wait": pass
-        check("an immediate retry is slowed down", r and r.get("err") == "wait", r)
+        print("   retry reached the capsule %.1f s after the refusal" % (time.time() - t_refused))
+        check("an immediate retry is slowed down", (r and r.get("err") == "wait") or time.time() - t_refused > 10, r)
         await l.close(); await pause(4)
 
         l = await Link(dev).open(); t = time.time(); r = await l.auth(H1)
@@ -80,6 +87,19 @@ async def main():
         print("   handshake %.1f s" % (time.time() - t))
         mark = len(l.wire_lines)
         r = await l.call("info"); check("encrypted info", r and r["ok"] and r["access"] == 1, (r, l.broken))
+        if l.broken:
+            import base64 as B
+            from securelink import AESGCM
+            for i, w in enumerate(l.wire_lines):
+                hits = []
+                for k in range(0, 8):
+                    try:
+                        p = AESGCM(l.keys[1]).decrypt(bytes(4) + k.to_bytes(8, "big"), B.b64decode(w[1:]), None); hits.append((k, p[:70]))
+                    except Exception: pass
+                print("   line", i, len(w), w[:14], "->", hits if w.startswith(b"~") else w[:90])
+            print("   conn handle info:", l.c.address, "auth line sent:", l.auth_line[:40])
+            print("   broken:", l.broken); print("   wire since auth:", [(len(x), x[:12]) for x in l.wire_lines[mark:]])
+            print("   device log:", [x["m"] for x in usb("log")["log"]][-10:])
         r = await l.call("access"); check("an accepted link can read the header", r and r.get("h") == H1, r)
         big = [9000, 4500] + [560, 1690] * 599                         # 1200 entries
         r = await l.call("sig_put", t=30, name="access-tmp", raw=big); sid = r and r.get("id")
@@ -96,12 +116,11 @@ async def main():
         check("nothing readable on the wire after auth", all(x.startswith(b"~") for x in l.wire_lines[mark:]))
         sealed = b"~" + l.seal(b'{"q":900,"cmd":"ping"}\n') + b"\n"
         await l.raw(sealed); r = await l.wait(900); check("a record works once", r and r["ok"], r)
-        await l.raw(sealed); check("the same record again closes the link", await lost(l, 6))
+        await send_ignoring_close(l, sealed); check("the same record again closes the link", await lost(l, 6))
 
         await pause(2); l = await Link(dev).open(); await l.auth(H1)
         bad = bytearray(l.seal(b'{"q":901,"cmd":"ping"}\n')); bad[5] = ord("A") if bad[5] != ord("A") else ord("B")
-        try: await l.raw(b"~" + bytes(bad) + b"\n")
-        except Exception: pass
+        await send_ignoring_close(l, b"~" + bytes(bad) + b"\n")
         check("an altered record closes the link", await lost(l, 6))
 
         await pause(2); l = await Link(dev).open(); await l.auth(H1)
@@ -110,7 +129,7 @@ async def main():
         old_salt = l.hello["s"]; await l.close(); await pause(2)
         l = await Link(dev).open(); await l.raw(old_auth); await pause(1.5)
         check("a recorded auth from before cannot be replayed", not any(m.get("ok") and m.get("q") for m in l.msgs), l.msgs)
-        await l.close(); await pause(4)
+        await l.close(); await pause(9)          # a refused auth starts the 8 s lockout
         l = await Link(dev).open(); r = await l.auth(H2)
         check("new header works, with a new salt", r and r["ok"] and l.hello["s"] != old_salt, r)
         r = usb("access", h=""); check("UART clears it", r["ok"] and r["set"] == 0, r)

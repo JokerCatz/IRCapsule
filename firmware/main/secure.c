@@ -24,7 +24,7 @@
 #define LINE_CAP        (RECORD_MAX + 64)
 #define LINKS           CONFIG_BT_NIMBLE_MAX_CONNECTIONS
 #define UNACCEPTED_US   30000000LL
-#define LOCKOUT_US      3000000LL                 /* after a wrong header, for everybody */
+#define LOCKOUT_US      8000000LL                 /* after a wrong header, for everybody; longer than a reconnect */
 static const char PROOF[] = "ircapsule";
 
 typedef struct {

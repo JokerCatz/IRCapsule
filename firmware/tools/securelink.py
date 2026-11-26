@@ -28,11 +28,21 @@ class Link:
         self.broken = None
         self.lost = False
 
-    async def open(self):
-        self.c = BleakClient(self.dev, timeout=20, disconnected_callback=lambda _: setattr(self, "lost", True))
-        await self.c.connect()
-        await self.c.start_notify(TX, self._rx)
-        return self
+    async def open(self, tries=3):
+        # Linux pairs by itself when it sees the HID service; right after a dropped link a connect can time out
+        for attempt in range(1, tries + 1):
+            try:
+                self.lost = False
+                self.c = BleakClient(self.dev, timeout=20, disconnected_callback=lambda _: setattr(self, "lost", True))
+                await self.c.connect()
+                await self.c.start_notify(TX, self._rx)
+                return self
+            except Exception as e:
+                print("   connect attempt %d failed: %s %s" % (attempt, type(e).__name__, e), flush=True)
+                await self.close()
+                if attempt == tries:
+                    raise
+                await asyncio.sleep(3)
 
     async def close(self):
         try:
@@ -51,7 +61,9 @@ class Link:
                     self.plain += AESGCM(self.keys[1]).decrypt(b"\0" * 4 + n, base64.b64decode(line[1:]), None)
                     self.rx_n += 1
                 except Exception as e:
-                    self.broken = repr(e)
+                    if not self.broken:
+                        self.broken = "%r on wire line %d (%d bytes, expected record %d): %r ... %r" % (
+                            e, len(self.wire_lines), len(line), self.rx_n, line[:40], line[-40:])
             else:
                 self.plain += line + b"\n"
         while b"\n" in self.plain:

@@ -27,7 +27,7 @@ handlers do not change. Remotes are opaque blobs; the web page owns their format
 - Session keys: `HMAC-SHA256(master, label || n_client(16) || n_capsule(16))`, label `"c2d"` / `"d2c"`; AES-256-GCM.
 - `{"q":q,"cmd":"auth","c":hex32,"p":b64}` (plain); `p` = record 0 of c2d with plaintext `ircapsule`.
   Success: the reply `{"q":q,"ok":true}\n` comes as record 0 of d2c. Failure: plain `{"ok":false,"err":"bad header"}`
-  and the link is closed; for 1 s after a failure every `auth` gets `"err":"wait"`.
+  and the link is closed; for 8 s after a failure every `auth` gets `"err":"wait"`.
 - After auth each wire line is a record `~` + base64(ciphertext || 16-byte tag). IV = 4 zero bytes + 8-byte
   big-endian per-direction counter (auth used 0, next is 1). A record's plaintext is a piece (at most 600 bytes) of
   the ordinary newline-delimited protocol stream. A record that fails to open closes the link.

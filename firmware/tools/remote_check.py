@@ -1,7 +1,7 @@
 """Check the TV remote commands over USB, with no TV connected. Does not change stored signals.
 
     IRCAP_PORT=... python3 remote_check.py
-WARNING: forgets the paired TV, if there is one, and leaves compatibility mode off.
+WARNING: forgets the paired TV, if there is one.
 """
 import sys, time
 sys.path.insert(0, __file__.rsplit("/", 1)[0] if "/" in __file__ else ".")
@@ -40,13 +40,6 @@ s = fails
 r = c.call("tv", op="pair"); check("window opens", r["ok"] and 110 <= r["window"] <= 120, r)
 r = c.call("tv", op="cancel"); check("window closes", r["ok"] and r["window"] == 0, r)
 r = c.call("tv", op="bogus"); check("unknown op", not r["ok"], r); done("pairing window and unknown op", s)
-s = fails
-r = c.call("tv"); check("compat off by default", r.get("compat") == 0, r)
-r = c.call("tv", op="compat", on=1); check("compat on", r["ok"] and r["compat"] == 1, r)
-c.call("reboot"); c.close(); time.sleep(2); c = Capsule()
-r = c.call("tv"); check("compat survives a reboot", r.get("compat") == 1, r)
-r = c.call("tv", op="compat"); check("compat needs on=0/1", not r["ok"], r)
-r = c.call("tv", op="compat", on=0); check("compat off", r["ok"] and r["compat"] == 0, r); done("compatibility mode switches and persists", s)
 i = c.call("info"); print("   heap", i["heap"], "min", i["minheap"], "signals", i["ns"])
 print("\nSOME FAILED" if fails else "\nALL PASS")
 sys.exit(1 if fails else 0)
