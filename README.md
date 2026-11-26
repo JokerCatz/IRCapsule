@@ -1,32 +1,34 @@
 # IR Capsule
 
-An ESP32-C3 "record and redirect" infrared hub. It learns the signals of your existing remotes
-(TV, set-top box, air conditioner, ...), stores them, and replays them on demand. It is meant to sit
-in a transparent capsule shell, be configured over Bluetooth LE from a static web page, and be
-triggered either from that page or by a spare IR remote that your appliances ignore.
+**English** | [繁體中文](README.zh-TW.md) | [简体中文](README.zh-CN.md)
 
-> **Status: early bring-up.** Recording and the replay path work in firmware. Nothing has been
-> verified against a real appliance yet, because the transmitter hardware is still being built.
-> See [Status](#status).
+An ESP32-C3 infrared hub that also works as a Bluetooth TV remote. It learns the signals of your existing remotes
+(TV, set-top box, air conditioner, ...), stores them, and replays them on demand. It is meant to sit in a
+transparent capsule shell, be configured and used from a static web page over Bluetooth LE, and be triggered from
+that page or by a spare IR remote that your appliances ignore.
+
+> **Status: working prototype.** The hardware is built and the main functions work; some real-world uses are not
+> confirmed yet. See [Status](#status).
 
 ## How it works
 
 ```
 spare remote (code your appliances ignore) ──IR──▶ [VS1838B ×1–4] ─┐
                                                                    ▼
-                    phone / PC ──BLE (Web Bluetooth)──▶  ESP32-C3 Super Mini
+                    phone / PC ──BLE (Web Bluetooth)──▶  ESP32-C3 Super Mini ──BLE remote──▶ Android / Google TV
                                                                    │ GPIO5
                                                                    ▼
                                              [ULN2003] ─▶ [IR333C-A ring ×8] ──IR──▶ appliances
 ```
 
-- **Record:** the receiver captures any remote; the firmware streams each frame as raw mark/space
-  timings plus a best-effort protocol guess.
+- **Record:** the receiver captures any remote; each frame is kept as raw mark/space timings plus a best-effort
+  protocol guess.
 - **Replay:** raw timings are sent with a hardware 38 kHz carrier (ESP32-C3 RMT peripheral), so BLE
   interrupts cannot jitter the carrier.
-- **Trigger:** a button in a static Web Bluetooth page, or a "fake" code from a spare remote.
-  The device only reacts to codes in its table and ignores its own emissions, so there is no feedback loop.
-- No web server, no Wi-Fi, no SD card. Everything stored on the chip's 4 MB flash.
+- **Trigger:** your own buttons on the web page, or a code from a spare remote. The capsule only reacts to codes
+  in its table and ignores its own emissions, so there is no feedback loop.
+- **Output:** infrared to appliances, or key presses to a paired TV over Bluetooth.
+- No web server on the device, no Wi-Fi, no SD card. Everything is stored on the chip's 4 MB flash.
 
 ## Status
 
