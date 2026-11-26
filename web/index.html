@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IR Capsule</title>
+<style>
+  :root {
+    --bg:#f6f7f4; --fg:#1a231f; --muted:#5c6a63; --line:#cbd3cd; --panel:#ecefe9; --card:#fbfcfa;
+    --accent:#17744a; --accent-fg:#ffffff; --warn:#8a5a00; --warnbg:#f6ecd2; --bad:#b8321f; --info:#1c62a8;
+    --wave:#17744a; --wave-bg:#e3e9e3;
+    --sans:system-ui,-apple-system,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --bg:#0f1512; --fg:#e3ebe6; --muted:#98a7a0; --line:#2c3833; --panel:#17201c; --card:#131b17;
+    --accent:#74d3a2; --accent-fg:#06180f; --warn:#f2c66d; --warnbg:#2a2414; --bad:#ff8f7a; --info:#86bdf0;
+    --wave:#74d3a2; --wave-bg:#1c2823; color-scheme:dark; } }
+  :root[data-theme="dark"]{
+    --bg:#0f1512; --fg:#e3ebe6; --muted:#98a7a0; --line:#2c3833; --panel:#17201c; --card:#131b17;
+    --accent:#74d3a2; --accent-fg:#06180f; --warn:#f2c66d; --warnbg:#2a2414; --bad:#ff8f7a; --info:#86bdf0;
+    --wave:#74d3a2; --wave-bg:#1c2823; color-scheme:dark; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans)}
+  header{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line)}
+  .bar{max-width:1100px;margin:0 auto;padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  h1{font-size:1.15rem;margin:0;letter-spacing:-.01em}
+  .grow{flex:1}
+  main{max-width:1100px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+  nav{max-width:1100px;margin:0 auto;padding:0 16px;display:flex;gap:2px;overflow-x:auto}
+  nav button{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;padding:8px 14px;color:var(--muted);cursor:pointer;font:inherit;white-space:nowrap}
+  nav button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
+  button,select,input,textarea{font:inherit;color:var(--fg)}
+  button.btn{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 12px;cursor:pointer}
+  button.btn:hover{border-color:var(--accent)}
+  button.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent);font-weight:600}
+  button.btn.danger{color:var(--bad)}
+  button.btn:disabled{opacity:.45;cursor:default}
+  input,select,textarea{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 8px;min-width:0}
+  input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+  .card h2{font-size:1rem;margin:0}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .muted{color:var(--muted)} .mono{font-family:var(--mono);font-size:.92em}
+  .chip{display:inline-block;padding:1px 8px;border-radius:99px;border:1px solid var(--line);font-size:.8rem;color:var(--muted);white-space:nowrap}
+  .chip.ok{color:var(--accent);border-color:var(--accent)} .chip.warn{color:var(--warn);border-color:var(--warn)} .chip.bad{color:var(--bad);border-color:var(--bad)}
+  .note{background:var(--warnbg);border-left:3px solid var(--warn);padding:8px 12px;border-radius:0 4px 4px 0}
+  .tablewrap{overflow-x:auto}
+  table{border-collapse:collapse;width:100%}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  th{color:var(--muted);font-weight:600;font-size:.78rem;letter-spacing:.04em;text-transform:uppercase}
+  canvas.wave{display:block;background:var(--wave-bg);border-radius:4px}
+  .live{display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto}
+  .live .item{display:flex;gap:10px;align-items:center;padding:4px 6px;border-radius:6px;background:var(--panel)}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--line);display:inline-block}
+  .dot.on{background:var(--bad);animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.25}}
+  @media (prefers-reduced-motion: reduce){.dot.on{animation:none}}
+  .log{font-family:var(--mono);font-size:.85rem;display:flex;flex-direction:column;gap:2px;max-height:60vh;overflow-y:auto}
+  .log div{display:flex;gap:10px} .log .t{color:var(--muted);min-width:64px}
+  .bar-meter{height:8px;border-radius:4px;background:var(--panel);overflow:hidden;min-width:120px}
+  .bar-meter i{display:block;height:100%;background:var(--accent)}
+  dialog{border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);max-width:min(1000px,94vw);width:100%;padding:16px}
+  dialog::backdrop{background:rgba(0,0,0,.5)}
+  .wavebox{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+  .hero{text-align:left;max-width:640px}
+  .live .item{flex-wrap:wrap}
+  @media (max-width:700px){   /* phones: tables become stacked cards so the name field is never off-screen */
+    table.stack thead{display:none}
+    table.stack tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;padding:10px 0;border-bottom:1px solid var(--line)}
+    table.stack td{border:0;padding:0}
+    table.stack.drafts td:nth-child(n+6), table.stack.sigs td:first-child, table.stack.sigs td:last-child, table.stack.rules td:nth-child(4), table.stack.rules td:last-child{grid-column:1/-1}
+    table.stack input, table.stack select{width:100%}
+  }
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>IR Capsule</h1>
+    <span id="status" class="chip">disconnected</span>
+    <span class="grow"></span>
+    <span id="recbadge" class="chip bad" hidden><span class="dot on"></span> <span data-i="Recording">Recording</span></span>
+    <button class="btn" id="lang" title="Language">中文</button>
+    <button class="btn" id="disc" hidden></button>
+  </div>
+  <nav id="tabs" role="tablist" hidden></nav>
+</header>
+<main id="app"></main>
+<dialog id="dlg"></dialog>
+
+<script>
+"use strict";
+/* =========================================================================================
+   IR Capsule web config. One static file, no build. Talks the device's line-JSON protocol
+   (docs/protocol.md) over Web Bluetooth, Web Serial, a dev WebSocket bridge, or a built-in demo.
+   ========================================================================================= */
+const SVC = "9f1d0001-6b7a-4c5e-8a2b-1c4a9e5d7f10", RXU = "9f1d0002-6b7a-4c5e-8a2b-1c4a9e5d7f10", TXU = "9f1d0003-6b7a-4c5e-8a2b-1c4a9e5d7f10";
+const ST = { DRAFT: 0, ACTIVE: 1, OFF: 2 };
+const enc = new TextEncoder(), dec = new TextDecoder();
+const $ = (s, e = document) => e.querySelector(s);
+
+/* ---------- i18n: English strings are the keys ---------- */
+const ZH = {
+  "Connect your IR Capsule":"連接你的 IR 膠囊","Bluetooth":"藍牙","USB serial":"USB 序列埠","Demo (no device)":"示範（不需裝置）",
+  "disconnected":"未連線","connecting…":"連線中…","connected":"已連線","Disconnect":"中斷連線","Recording":"錄製中",
+  "Record":"錄製","Signals":"訊號","Rules":"對照","Log":"紀錄","Device":"裝置",
+  "Start recording":"開始錄製","Stop recording":"停止錄製","Point any remote at the receiver and press keys. Each new key becomes a numbered draft; pressing the same key again only raises its counter. Name the drafts below to make them usable.":"對著接收頭按任何遙控器的鍵。每個新的鍵會成為一筆依序編號的草稿，重複按同一個鍵只會增加次數。在下方為草稿命名後才能使用。",
+  "LED test":"LED 測試","Start LED test":"開始 LED 測試","Stop":"停止","All LEDs blink for 60 s. Look through a phone camera (try the front one). Don't stare at them up close.":"所有 LED 閃爍 60 秒。請用手機相機觀看（先試前鏡頭），不要近距離直視。",
+  "Live frames":"即時收到的訊號","Nothing heard yet.":"還沒有收到訊號。","Drafts":"草稿","No drafts. Start recording and press some keys.":"沒有草稿。開始錄製並按幾個鍵吧。",
+  "Fill names from a list":"用清單批次命名","One name per line, applied in recording order to the drafts that have no name yet.":"每行一個名稱，依錄製順序套用到還沒命名的草稿。",
+  "Apply names":"套用名稱","Save named drafts":"儲存已命名的草稿","Delete":"刪除","Name":"名稱","Type":"類型","Device":"裝置","Wave":"波形","Heard":"次數","Name this signal":"為這個訊號命名",
+  "Appliance command":"家電指令","Remote key":"遙控器按鍵","(no device)":"（無）","Preview":"預覽","New draft":"新草稿","Draft":"草稿","Known":"已儲存","Triggered":"已觸發","Ignored":"忽略",
+  "Saved signals":"已儲存的訊號","Send":"發射","Enable":"啟用","Disable":"停用","Active":"啟用","Disabled":"停用","Rename":"重新命名","Group":"分組","Add device":"新增裝置","Device name":"裝置名稱",
+  "No saved signals yet. Record some and name them.":"還沒有已儲存的訊號。先錄製並命名。","Entries":"筆數","Carrier (kHz)":"載波 (kHz)","Save":"儲存","Cancel":"取消",
+  "Rule":"規則","New rule":"新增規則","Trigger":"觸發","When I hear":"當聽到","Then do":"就執行","Add step":"新增步驟","Send signal":"發射訊號","Wait":"等待","Set layer":"切換圖層","Layer":"圖層","Run now":"立即執行",
+  "Rules react to a saved signal heard by the receiver (for example a key on a spare remote) and run a list of steps. Disabled rules and drafts never fire. Rules do not fire while recording.":"規則會在接收頭聽到某個已儲存的訊號（例如備用遙控器的一個鍵）時，依序執行一串步驟。停用的規則與草稿不會被觸發，錄製中也不會觸發。",
+  "No rules yet.":"還沒有規則。","(none)":"（無）","ms":"毫秒","Edit":"編輯","Close":"關閉","Device log":"裝置紀錄","Clear":"清除","Firmware":"韌體","Free heap":"可用記憶體","Storage":"儲存空間","Uptime":"運作時間","Bluetooth MTU":"藍牙 MTU",
+  "Settings":"設定","Bluetooth name (applies after reboot)":"藍牙名稱（重開機後生效）","Ignore repeats within (ms)":"忽略重複觸發的間隔（毫秒）","Active layer":"目前圖層",
+  "Backup":"備份","Export backup":"匯出備份","Import backup":"匯入備份","Exporting":"匯出中","Importing":"匯入中","Reboot":"重開機","Factory reset":"恢復原廠設定","This erases all signals, rules and devices on the capsule. Continue?":"這會清除膠囊上所有的訊號、規則與裝置。要繼續嗎？",
+  "Danger zone":"危險操作","Signal sent":"已發射","Saved":"已儲存","Failed":"失敗","Heard x":"收到次數","entries":"筆","Total":"總長","Waveform":"波形","Linear time":"線性時間軸","Squeezed (long gaps shortened)":"壓縮（縮短長間隔）","Zoom":"縮放","Copy timings":"複製時間資料",
+  "Unsupported in this browser.":"此瀏覽器不支援。","Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy.":"Web Bluetooth 需要 Chrome 或 Edge（Android/桌面）。iPhone 請使用 Bluefy 等瀏覽器。",
+  "Web Serial needs desktop Chrome or Edge.":"Web Serial 需要桌面版 Chrome 或 Edge。","Demo mode: a simulated capsule runs in this page.":"示範模式：此頁面內執行的是模擬的膠囊。",
+  "Simulate a remote key":"模擬按下遙控器的鍵","Key A":"按鍵 A","Key B":"按鍵 B","AC state":"冷氣狀態",
+  "drafts":"草稿","signals":"訊號","rules":"規則","Name needed before use":"需要先命名才能使用","Saved {n}":"已儲存 {n} 筆","Nothing to save: give the drafts names first.":"沒有可儲存的項目，請先替草稿命名。",
+  "Heard a saved signal":"聽到已儲存的訊號","Learning counter":"次數","press":"次","Use as":"用途","Backup file":"備份檔","Restored":"已還原","sent":"已發射",
+  "Not found":"找不到","Copied":"已複製","Rename signal":"重新命名訊號","Delete signal?":"刪除這個訊號？","Delete rule?":"刪除這條規則？","Delete draft?":"刪除這筆草稿？",
+};
+let lang = (navigator.language || "en").toLowerCase().startsWith("zh") ? "zh" : "en";
+try { lang = localStorage.getItem("lang") || lang; } catch (e) {}
+const t = (s, vars) => { let r = (lang === "zh" && ZH[s]) || s; if (vars) for (const k in vars) r = r.replace("{" + k + "}", vars[k]); return r; };
+
+/* ---------- tiny DOM helper ---------- */
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "value") el.value = v;
+    else if (v === true) el.setAttribute(k, "");
+    else el.setAttribute(k, v);
+  }
+  for (const c of kids.flat(Infinity)) { if (c == null || c === false) continue; el.append(c.nodeType ? c : document.createTextNode(c)); }
+  return el;
+}
+
+/* ---------- IR helpers (ported from the firmware) ---------- */
+function normalise(r) {
+  r = r.slice();
+  const marks = []; let total = 0;
+  for (let k = 2; k + 1 < r.length; k += 2) if (r[k] < 1500) { total++; if (marks.length < 20) marks.push(r[k]); }
+  if (total < 24) return r;
+  marks.sort((a, b) => a - b);
+  const canon = (marks[9] + marks[10]) / 2, tailn = Math.max(8, total >> 2);
+  let sum = 0, cnt = 0;
+  for (let k = ((r.length - 1) >> 1) << 1; k >= 2 && cnt < tailn; k -= 2) if (r[k] < 1500) { sum += r[k]; cnt++; }
+  if (!cnt || sum / cnt > canon * 0.85) return r;
+  for (let k = 2; k + 1 < r.length; k += 2) if (r[k] < 1500) { const s = r[k + 1] + r[k] - canon; r[k] = Math.round(canon); r[k + 1] = Math.max(100, Math.round(s)); }
+  return r;
+}
+function rawMatch(a, b) {
+  const L = Math.min(a.length, b.length);
+  if (L < 4 || (a.length !== b.length && L < 20)) return false;
+  for (let i = 0; i < L; i++) if (Math.abs(a[i] - b[i]) > Math.max(150, b[i] / 4)) return false;
+  return true;
+}
+function nec(addr, cmd) {
+  const w = (addr | ((~addr & 255) << 8) | (cmd << 16) | ((~cmd & 255) << 24)) >>> 0, r = [9000, 4500];
+  for (let i = 0; i < 32; i++) r.push(560, (w >>> i) & 1 ? 1690 : 560);
+  r.push(560); return r;
+}
+function describe(r) {
+  const n = r.length, near = (v, x) => v > x * 0.7 && v < x * 1.3;
+  if (n >= 66 && near(r[0], 9000) && near(r[1], 4500)) {
+    let w = 0; for (let i = 0; i < 32; i++) if (near(r[3 + 2 * i], 1690)) w |= 1 << i;
+    return "NEC a=" + (w & 255).toString(16).toUpperCase().padStart(2, "0") + " c=" + ((w >> 16) & 255).toString(16).toUpperCase().padStart(2, "0");
+  }
+  return n >= 100 ? "RAW-LONG n=" + n : "RAW n=" + n;
+}
+
+/* ---------- links ---------- */
+class Link {
+  constructor() { this.onLine = () => {}; this.onClose = () => {}; this.chain = Promise.resolve(); this.chunk = 20; this.name = ""; }
+  send(line) { this.chain = this.chain.then(() => this._write(line + "\n")); return this.chain; }   // one whole line at a time
+}
+class BleLink extends Link {
+  async open() {
+    if (!navigator.bluetooth) throw new Error(t("Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy."));
+    this.dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }, { namePrefix: "IRCapsule" }], optionalServices: [SVC] });
+    this.name = this.dev.name || "IR Capsule";
+    this.dev.addEventListener("gattserverdisconnected", () => this.onClose());
+    const srv = await this.dev.gatt.connect(), svc = await srv.getPrimaryService(SVC);
+    this.rx = await svc.getCharacteristic(RXU); this.tx = await svc.getCharacteristic(TXU);
+    let buf = "";
+    this.tx.addEventListener("characteristicvaluechanged", e => {
+      buf += dec.decode(new Uint8Array(e.target.value.buffer), { stream: true });
+      let i; while ((i = buf.indexOf("\n")) >= 0) { const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (l) this.onLine(l); }
+    });
+    await this.tx.startNotifications();
+  }
+  async _write(str) {
+    const b = enc.encode(str);
+    for (let i = 0; i < b.length; i += this.chunk) {
+      const part = b.slice(i, i + this.chunk);
+      if (this.rx.writeValueWithResponse) await this.rx.writeValueWithResponse(part); else await this.rx.writeValue(part);
+    }
+  }
+  setMtu(mtu) { this.chunk = Math.max(20, Math.min(180, mtu - 3)); }
+  close() { try { this.dev.gatt.disconnect(); } catch (e) {} }
+}
+class SerialLink extends Link {
+  async open() {
+    if (!navigator.serial) throw new Error(t("Web Serial needs desktop Chrome or Edge."));
+    this.port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] });
+    await this.port.open({ baudRate: 115200 });
+    try { await this.port.setSignals({ dataTerminalReady: false, requestToSend: false }); } catch (e) {}
+    this.name = "USB";
+    this.writer = this.port.writable.getWriter();
+    (async () => {
+      const r = this.port.readable.getReader(); let buf = "";
+      try { for (;;) { const { value, done } = await r.read(); if (done) break;
+        buf += dec.decode(value, { stream: true }); let i;
+        while ((i = buf.indexOf("\n")) >= 0) { const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (l.startsWith("{")) this.onLine(l); } } }
+      catch (e) {} this.onClose();
+    })();
+  }
+  async _write(str) { await this.writer.write(enc.encode(str)); }
+  async close() { try { this.writer.releaseLock(); await this.port.close(); } catch (e) {} }
+}
+class WsLink extends Link {
+  async open(url) {
+    this.name = "bridge";
+    await new Promise((res, rej) => { this.ws = new WebSocket(url); this.ws.onopen = res; this.ws.onerror = () => rej(new Error("bridge not reachable")); });
+    this.ws.onmessage = e => this.onLine(String(e.data)); this.ws.onclose = () => this.onClose();
+  }
+  async _write(str) { this.ws.send(str.trim()); }
+  close() { this.ws.close(); }
+}
+
+/* ---------- demo device: a small in-page re-implementation of the protocol ---------- */
+class MockLink extends Link {
+  constructor() {
+    super(); this.name = "demo"; this.s = { sigs: [], rules: [], devs: [], next: 1, layer: 0, rec: false, ring: [], seq: 0, log: [], lastFire: 0, dedupe: 400, name: "IRCapsule-DEMO" };
+    this.raw = new Map();
+    const S = this.s;
+    const dev = (n) => { const id = S.devs.length + 1; S.devs.push({ id, name: n }); return id; };
+    const sig = (name, kind, d, raw, proto, st = 1) => { const id = S.next++; S.sigs.push({ id, name, kind, st, hits: 1, dev: d, khz: 38, n: raw.length, p: proto || describe(raw) }); this.raw.set(id, raw); return id; };
+    const tv = dev("Living room TV"), stb = dev("Set-top box");
+    const kA = sig("Spare remote: key 1", 1, 0, nec(0x00, 0x45)), kB = sig("Spare remote: key 2", 1, 0, nec(0x00, 0x46));
+    const tvp = sig("TV power", 0, tv, nec(0x04, 0x08)), tvv = sig("TV volume up", 0, tv, nec(0x04, 0x02)), sp = sig("Set-top power", 0, stb, nec(0x01, 0x51));
+    S.rules.push({ id: S.next++, name: "Movie night", layer: 0, on: 1, trig: kA, act: [0, tvp, 1, 500, 0, sp] });
+    this.ac = [0, 1].map(i => { const r = [3400, 1750]; for (let b = 0; b < 144; b++) r.push(400, ((b * 7 + i * 13) % 5 < 2) ? 1300 : 540); r.push(400); return r; });
+    this.keys = { A: nec(0x00, 0x45), B: nec(0x00, 0x46), AC: this.ac[0], NEW: nec(0x20, 0x09) };
+    S.log.push({ t: 1000, m: "boot ok" });
+  }
+  async open() {}
+  async _write(str) { setTimeout(() => this.handle(str.trim()), 8); }
+  emit(o) { setTimeout(() => this.onLine(JSON.stringify(o)), 2); }
+  logm(m) { const e = { t: Math.round(performance.now()), m }; this.s.log.push(e); this.emit({ ev: "log", ...e }); }
+  hear(raw) {   // a remote key press arrives
+    const S = this.s; raw = normalise(raw); const seq = ++S.seq; let draft = 0, matched = 0, hit = S.sigs.find(x => this.raw.has(x.id) && rawMatch(raw, this.raw.get(x.id)));
+    const fr = { seq, t: Math.round(performance.now()), gap: -1, n: raw.length, p: describe(raw), m: 0, sig: hit ? hit.id : 0, draft: 0, rec: S.rec ? 1 : 0, raw }; S.ring.push(fr); if (S.ring.length > 6) S.ring.shift();
+    if (S.rec) {
+      if (hit && hit.st === 0) { hit.hits++; draft = hit.id; }
+      else if (!hit) { const id = S.next++; S.sigs.push({ id, name: "", kind: 0, st: 0, hits: 1, dev: 0, khz: 38, n: raw.length, p: fr.p }); this.raw.set(id, raw); draft = fr.sig = id; this.logm("recorded draft #" + id + " (" + fr.p + ")"); }
+    } else {
+      const r = S.rules.find(r => r.on && r.layer === S.layer && S.sigs.find(x => x.id === r.trig && x.st === 1) && rawMatch(raw, this.raw.get(r.trig)));
+      if (r) { matched = r.id; if (performance.now() - S.lastFire > S.dedupe) { S.lastFire = performance.now(); this.logm('trigger → rule "' + r.name + '"'); this.run(r); } }
+    }
+    fr.draft = draft; fr.m = matched; const { raw: _r, ...ev } = fr; this.emit({ ev: "frame", ...ev });
+  }
+  async run(r) { for (let i = 0; i + 1 < r.act.length; i += 2) { const [ty, v] = [r.act[i], r.act[i + 1]]; if (ty === 0) { const s = this.s.sigs.find(x => x.id === v); if (s && s.st === 1) this.logm('sent "' + s.name + '" (' + s.n + " entries) ok"); } else if (ty === 1) await new Promise(res => setTimeout(res, v)); else if (ty === 2) { this.s.layer = v; this.logm("layer " + v); } } }
+  handle(line) {
+    const S = this.s; let m; try { m = JSON.parse(line); } catch (e) { return; }
+    const ok = (o = {}) => this.emit({ q: m.q, ok: true, ...o }), err = e => this.emit({ q: m.q, ok: false, err: e });
+    const sg = id => S.sigs.find(x => x.id === id);
+    switch (m.cmd) {
+      case "ping": return ok();
+      case "info": return ok({ fw: "demo", name: S.name, heap: 90000, minheap: 85000, up: Math.round(performance.now() / 1000), layer: S.layer, rec: S.rec ? 1 : 0, ns: S.sigs.length, nr: S.rules.length, nd: S.devs.length, drafts: S.sigs.filter(x => x.st === 0).length, dedupe: S.dedupe, mtu: 512, nvs: { used: 500 + S.sigs.length * 4, free: 31700, total: 32256 }, max: { sig: 96, rule: 48, dev: 16, raw: 1200, act: 8 } });
+      case "list": return ok({ layer: S.layer, dev: S.devs, sig: S.sigs, rule: S.rules });
+      case "get": { const s = sg(m.id); return s ? ok({ ...s, raw: this.raw.get(s.id) }) : err("no such signal"); }
+      case "frame": { const f = m.seq ? S.ring.find(x => x.seq === m.seq) : S.ring[S.ring.length - 1]; return f ? ok(f) : err("no such frame"); }
+      case "record": S.rec = !!(m.on ?? 1); this.logm(S.rec ? "recording on" : "recording off"); return ok();
+      case "inject": ok(); return this.hear(m.raw);
+      case "sig_put": {
+        let s = m.id ? sg(m.id) : null; let raw = m.raw ? normalise(m.raw) : (m.frame != null ? (S.ring.find(x => x.seq === m.frame || (!m.frame && x === S.ring[S.ring.length - 1])) || {}).raw : null);
+        if (!s) { if (!raw) return err("raw or frame required"); s = { id: S.next++, name: "", kind: 0, st: m.name ? 1 : 0, hits: 1, dev: 0, khz: 38, n: 0, p: describe(raw) }; S.sigs.push(s); } else if (m.id && !s) return err("no such signal");
+        if (m.name) s.name = m.name; if (m.state != null) { if (m.state !== 0 && !s.name) return err("a signal needs a name before it can be used"); s.st = m.state; }
+        if (m.kind != null) s.kind = m.kind; if (m.dev != null) s.dev = m.dev; if (m.khz) s.khz = m.khz; if (raw) { this.raw.set(s.id, raw); s.n = raw.length; }
+        this.logm('saved signal "' + (s.name || "(draft)") + '" (' + s.n + " entries)"); return ok({ id: s.id });
+      }
+      case "sig_del": { const i = S.sigs.findIndex(x => x.id === m.id); if (i < 0) return err("no such signal"); S.sigs.splice(i, 1); this.raw.delete(m.id); S.rules.forEach(r => { if (r.trig === m.id) r.trig = 0; const a = []; for (let k = 0; k + 1 < r.act.length; k += 2) if (!(r.act[k] === 0 && r.act[k + 1] === m.id)) a.push(r.act[k], r.act[k + 1]); r.act = a; }); return ok(); }
+      case "dev_put": { let d = m.id ? S.devs.find(x => x.id === m.id) : null; if (!d) { d = { id: (Math.max(0, ...S.devs.map(x => x.id)) + 1), name: "" }; S.devs.push(d); } if (m.name) d.name = m.name; return ok({ id: d.id }); }
+      case "dev_del": S.devs = S.devs.filter(x => x.id !== m.id); S.sigs.forEach(x => { if (x.dev === m.id) x.dev = 0; }); return ok();
+      case "rule_put": {
+        let r = m.id ? S.rules.find(x => x.id === m.id) : null; if (!r) { r = { id: S.next++, name: "Rule", layer: 0, on: 1, trig: 0, act: [] }; S.rules.push(r); }
+        if (m.name) r.name = m.name; if (m.layer != null) r.layer = m.layer; if (m.on != null) r.on = m.on ? 1 : 0;
+        if (m.trig != null) { const s = sg(m.trig); if (m.trig && !s) return err("trigger signal not found"); if (s && s.st === 0) return err("name and save the draft first"); r.trig = m.trig; }
+        if (m.act) r.act = m.act; return ok({ id: r.id });
+      }
+      case "rule_del": S.rules = S.rules.filter(x => x.id !== m.id); return ok();
+      case "fire": { const s = sg(m.id); if (!s) return err("no such signal"); if (s.st !== 1) return err(s.st === 0 ? "name and save the draft first" : "signal is disabled"); this.logm('sent "' + s.name + '" (' + s.n + " entries) ok"); return ok(); }
+      case "run": { const r = S.rules.find(x => x.id === m.id); if (!r) return err("no such rule"); this.run(r); return ok(); }
+      case "layer": if (m.n != null) { S.layer = m.n; this.logm("layer " + m.n); } return ok({ layer: S.layer });
+      case "set": if (m.name) S.name = m.name; if (m.dedupe != null) S.dedupe = m.dedupe; return ok();
+      case "log": return ok({ log: S.log.slice(-48) });
+      case "reset": S.sigs = []; S.rules = []; S.devs = []; return ok();
+      case "reboot": return ok();
+      case "ledtest": {
+        const on = !!(m.on ?? 1), was = !!this.ledTimer; clearTimeout(this.ledTimer); this.ledTimer = 0;
+        if (on) { this.ledTimer = setTimeout(() => { this.ledTimer = 0; this.logm("led test off"); }, 60000); if (!was) this.logm("led test on"); }
+        else if (was) this.logm("led test off");
+        return ok();
+      }
+      case "play": this.logm("sent raw (" + (m.raw || []).length + " entries) ok"); return ok();
+      default: return err("unknown cmd");
+    }
+  }
+}
+
+/* ---------- protocol client ---------- */
+class Device {
+  constructor(link) {
+    this.link = link; this.q = 0; this.pending = new Map(); this.handlers = [];
+    link.onLine = l => this._line(l);
+  }
+  on(fn) { this.handlers.push(fn); }
+  _line(l) {
+    let m; try { m = JSON.parse(l); } catch (e) { return; }
+    if (m.ev) { this.handlers.forEach(f => f(m)); return; }
+    const p = this.pending.get(m.q); if (!p) return;
+    this.pending.delete(m.q); clearTimeout(p.timer);
+    if (m.ok) p.res(m); else { const e = new Error(m.err || "error"); e.reply = m; p.rej(e); }
+  }
+  call(cmd, args = {}, timeout = 20000) {
+    const q = ++this.q;
+    return new Promise((res, rej) => {
+      const timer = setTimeout(() => { this.pending.delete(q); rej(new Error("timeout: " + cmd)); }, timeout);
+      this.pending.set(q, { res, rej, timer });
+      this.link.send(JSON.stringify({ q, cmd, ...args })).catch(e => { clearTimeout(timer); this.pending.delete(q); rej(e); });
+    });
+  }
+}
+
+/* ---------- application state ---------- */
+const S = { dev: null, link: null, info: null, sigs: [], rules: [], devs: [], layer: 0, tab: "record", frames: [], logs: [], rec: false,
+            raw: new Map(), frameRaw: new Map(), edits: new Map(), ruleEdit: null, group: false, status: "disconnected", demo: null };
+window.app = S;   // handy for debugging and tests
+
+const sigName = id => { const s = S.sigs.find(x => x.id === id); return s ? (s.name || t("Draft") + " #" + id) : t("(none)"); };
+const devName = id => { const d = S.devs.find(x => x.id === id); return d ? d.name : ""; };
+const fmtMs = us => (us / 1000).toFixed(us >= 100000 ? 0 : 1) + " ms";
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function toast(msg, bad) {
+  const el = h("div", { class: "chip " + (bad ? "bad" : "ok"), style: "position:fixed;right:16px;bottom:16px;z-index:20;background:var(--bg);padding:6px 12px" }, msg);
+  document.body.append(el); setTimeout(() => el.remove(), 3500);
+}
+async function act(promise, okMsg) {
+  try { const r = await promise; if (okMsg) toast(okMsg); return r; }
+  catch (e) { toast(e.message || String(e), true); throw e; }
+}
+
+/* raw timings are fetched one at a time: the device answers sequentially and BLE is slow */
+let rawChain = Promise.resolve();
+function getRaw(id) {
+  if (S.raw.has(id)) return Promise.resolve(S.raw.get(id));
+  const p = rawChain.then(async () => {
+    if (S.raw.has(id)) return S.raw.get(id);
+    const r = await S.dev.call("get", { id }); S.raw.set(id, r.raw); return r.raw;
+  });
+  rawChain = p.catch(() => {}); return p;
+}
+function getFrameRaw(seq) {
+  if (S.frameRaw.has(seq)) return Promise.resolve(S.frameRaw.get(seq));
+  const p = rawChain.then(async () => {
+    if (S.frameRaw.has(seq)) return S.frameRaw.get(seq);
+    const r = await S.dev.call("frame", { seq }); S.frameRaw.set(seq, r.raw); return r.raw;
+  });
+  rawChain = p.catch(() => {}); return p;
+}
+
+/* ---------- waveform ---------- */
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function drawWave(cv, raw, o = {}) {
+  const dpr = window.devicePixelRatio || 1, W = o.w || 160, H = o.h || 28;
+  const squeeze = o.squeeze !== false, cap = o.cap || 3500;
+  const d = raw.map(x => squeeze ? Math.min(x, cap) : x), total = d.reduce((a, b) => a + b, 0) || 1;
+  const width = o.px ? Math.max(W, Math.round(total * o.px)) : W;
+  cv.width = width * dpr; cv.height = H * dpr; cv.style.width = width + "px"; cv.style.height = H + "px";
+  const c = cv.getContext("2d"); c.scale(dpr, dpr); c.clearRect(0, 0, width, H);
+  const pad = 3, hi = pad, lo = H - pad, k = (width - 1) / total;
+  c.strokeStyle = css("--wave"); c.lineWidth = o.thick ? 1.6 : 1; c.beginPath();
+  let x = 0, y = lo; c.moveTo(0, y);
+  d.forEach((dur, i) => { const ny = i % 2 === 0 ? hi : lo; if (ny !== y) { c.lineTo(x, ny); y = ny; } x += dur * k; c.lineTo(x, y); });
+  c.stroke();
+  if (o.axis) {   // time ticks on the unsqueezed scale only
+    c.fillStyle = css("--muted"); c.font = "10px " + css("--mono");
+    if (!squeeze) { const step = total > 200000 ? 50000 : total > 60000 ? 10000 : 2000; for (let tt = 0; tt < total; tt += step) { c.fillRect(tt * k, H - 2, 1, 2); c.fillText((tt / 1000) + "ms", tt * k + 2, H - 4); } }
+  }
+}
+function waveCanvas(raw, o) { const cv = h("canvas", { class: "wave" }); drawWave(cv, raw, o); return cv; }
+function hydrateWaves(root) {
+  root.querySelectorAll("canvas[data-sig]").forEach(cv => getRaw(+cv.dataset.sig).then(r => drawWave(cv, r, { w: 160, h: 28 })).catch(() => {}));
+  root.querySelectorAll("canvas[data-frame]").forEach(cv => {
+    const seq = +cv.dataset.frame; if (S.frameRaw.has(seq)) drawWave(cv, S.frameRaw.get(seq), { w: 160, h: 28 });
+    else getFrameRaw(seq).then(r => drawWave(cv, r, { w: 160, h: 28 })).catch(() => {});
+  });
+}
+function thumb(kind, id) { return h("canvas", { class: "wave", ["data-" + kind]: id, width: 160, height: 28, style: "width:160px;height:28px" }); }
+
+async function previewDialog(title, getter, meta) {
+  const dlg = $("#dlg"); let raw;
+  dlg.replaceChildren(h("p", { class: "muted" }, "…")); if (!dlg.open) dlg.showModal();
+  try { raw = await getter(); } catch (e) { toast(e.message, true); dlg.close(); return; }
+  const marks = raw.filter((_, i) => i % 2 === 0), total = raw.reduce((a, b) => a + b, 0);
+  let squeeze = true, zoom = 1;
+  const box = h("div", { class: "wavebox" }), redraw = () => {
+    const shown = raw.reduce((a, x) => a + (squeeze ? Math.min(x, 3500) : x), 0);   // fit the whole frame at zoom 1
+    const cv = h("canvas", { class: "wave" }); drawWave(cv, raw, { w: 920, h: 120, squeeze, px: Math.min(zoom * 920 / shown, 16000 / shown), thick: true, axis: true });
+    box.replaceChildren(cv);
+  };
+  const sq = h("select", { onchange: () => { squeeze = sq.value === "s"; redraw(); } }, h("option", { value: "s" }, t("Squeezed (long gaps shortened)")), h("option", { value: "l" }, t("Linear time")));
+  const zm = h("input", { type: "range", min: 1, max: 8, value: 1, step: 0.5, oninput: () => { zoom = +zm.value; redraw(); } });
+  redraw();
+  dlg.replaceChildren(
+    h("div", { class: "row" }, h("h2", { style: "margin:0" }, title), h("span", { class: "grow" }), h("button", { class: "btn", onclick: () => dlg.close() }, t("Close"))),
+    h("p", { class: "muted mono" }, `${raw.length} ${t("entries")} · ${t("Total")} ${fmtMs(total)} · ${meta || ""}`),
+    h("div", { class: "row" }, sq, h("label", { class: "row muted" }, t("Zoom"), zm), h("button", { class: "btn", onclick: () => navigator.clipboard.writeText(raw.join(",")).then(() => toast(t("Copied"))) }, t("Copy timings"))),
+    box,
+  );
+}
+
+/* ---------- refresh ---------- */
+let refreshTimer = null;
+async function refresh() {
+  const [L, I] = await Promise.all([S.dev.call("list"), S.dev.call("info")]);
+  S.sigs = L.sig; S.rules = L.rule; S.devs = L.dev; S.layer = L.layer; S.info = I; S.rec = !!I.rec;
+  for (const id of [...S.raw.keys()]) if (!S.sigs.find(s => s.id === id)) S.raw.delete(id);
+  render();
+}
+function refreshSoon() { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refresh().catch(() => {}), 250); }
+
+function onEvent(ev) {
+  if (ev.ev === "frame") {
+    if (ev.raw) S.frameRaw.set(ev.seq, ev.raw);
+    S.frames.unshift(ev); S.frames.length = Math.min(S.frames.length, 40);
+    if (S.tab === "record") renderLive();
+    if (ev.draft || ev.m) refreshSoon();
+    if (ev.rec === 0 && ev.sig) {}
+  } else if (ev.ev === "log") {
+    S.logs.push(ev); if (S.logs.length > 300) S.logs.shift();
+    if (S.tab === "log") renderLog();
+    if (/saved|deleted|layer|recording|draft/.test(ev.m)) refreshSoon();
+  }
+}
+
+/* ---------- connect / disconnect ---------- */
+async function connect(kind, url) {
+  setStatus("connecting…");
+  let link;
+  try {
+    if (kind === "ble") link = new BleLink(); else if (kind === "serial") link = new SerialLink(); else if (kind === "ws") link = new WsLink(); else { link = new MockLink(); S.demo = link; }
+    await link.open(url);
+    link.onClose = () => { if (S.link === link) disconnected(); };
+    S.link = link; S.dev = new Device(link); S.dev.on(onEvent);
+    if (kind === "serial" || kind === "ws") {   // opening the port reboots the board; wait until it answers
+      for (let i = 0; i < 25; i++) { try { await S.dev.call("ping", {}, 600); break; } catch (e) { if (i === 24) throw new Error("device does not answer"); } }
+    }
+    await refresh();
+    if (kind === "ble") link.setMtu(S.info.mtu || 23);
+    const lg = await S.dev.call("log"); S.logs = lg.log.map(x => ({ ev: "log", ...x }));
+    setStatus("connected", link.name); renderTabs(); render();
+  } catch (e) {
+    console.error(e); if (link && link.close) try { link.close(); } catch (x) {}
+    S.link = null; S.dev = null; setStatus("disconnected"); if (e.name !== "NotFoundError") toast(e.message || String(e), true); render();
+  }
+}
+function disconnected() { S.link = null; S.dev = null; S.demo = null; setStatus("disconnected"); renderTabs(); render(); }
+function setStatus(s, extra) {
+  S.status = s; const el = $("#status");
+  el.textContent = t(s) + (extra ? " · " + extra : ""); el.className = "chip " + (s === "connected" ? "ok" : s === "connecting…" ? "warn" : "");
+  const d = $("#disc"); d.hidden = s !== "connected"; d.textContent = t("Disconnect");
+}
+
+/* ---------- tabs ---------- */
+const TABS = [["record", "Record"], ["signals", "Signals"], ["rules", "Rules"], ["log", "Log"], ["device", "Device"]];
+function renderTabs() {
+  const nav = $("#tabs"); nav.hidden = !S.dev;
+  nav.replaceChildren(...TABS.map(([k, label]) => h("button", { role: "tab", "aria-selected": S.tab === k, onclick: () => { S.tab = k; renderTabs(); render(); } },
+    t(label), k === "record" && S.sigs.some(s => s.st === ST.DRAFT) ? " (" + S.sigs.filter(s => s.st === ST.DRAFT).length + ")" : "")));
+  $("#recbadge").hidden = !(S.dev && S.rec);
+}
+
+function render() {
+  const keep = document.activeElement && document.activeElement.dataset ? { key: document.activeElement.dataset.key, pos: document.activeElement.selectionStart } : null;
+  const app = $("#app");
+  if (!S.dev) app.replaceChildren(renderLanding());
+  else {
+    renderTabs();
+    app.replaceChildren(...({ record: renderRecord, signals: renderSignals, rules: renderRules, log: renderLogView, device: renderDevice }[S.tab])().filter(Boolean));
+    hydrateWaves(app);
+    if (S.tab === "record") renderLive();
+  }
+  if (keep && keep.key) { const el = app.querySelector(`[data-key="${keep.key}"]`); if (el) { el.focus(); try { el.setSelectionRange(keep.pos, keep.pos); } catch (e) {} } }
+}
+
+/* ---------- landing ---------- */
+function renderLanding() {
+  const p = new URLSearchParams(location.search), bridge = p.get("bridge");
+  return h("div", { class: "card hero" },
+    h("h2", null, t("Connect your IR Capsule")),
+    h("div", { class: "row" },
+      h("button", { class: "btn primary", onclick: () => connect("ble") }, t("Bluetooth")),
+      h("button", { class: "btn", onclick: () => connect("serial") }, t("USB serial")),
+      h("button", { class: "btn", onclick: () => connect("demo") }, t("Demo (no device)")),
+      bridge && h("button", { class: "btn", onclick: () => connect("ws", bridge) }, "Bridge")),
+    !navigator.bluetooth && h("div", { class: "note" }, t("Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy.")),
+  );
+}
+
+/* ---------- record tab ---------- */
+function frameStatus(ev) {
+  const chips = [];
+  if (ev.m) chips.push(h("span", { class: "chip ok" }, t("Triggered") + " · " + (S.rules.find(r => r.id === ev.m) || {}).name));
+  else if (ev.draft) { const d = S.sigs.find(s => s.id === ev.draft); chips.push(h("span", { class: "chip warn" }, d && d.hits > 1 ? t("Draft") + " #" + ev.draft + " ×" + d.hits : t("New draft") + " #" + ev.draft)); }
+  else if (ev.sig) chips.push(h("span", { class: "chip" }, t("Known") + ": " + sigName(ev.sig)));
+  return chips;
+}
+function renderLive() {
+  const box = $("#live"); if (!box) return;
+  box.replaceChildren(...(S.frames.length ? S.frames.slice(0, 12).map(ev => h("div", { class: "item" },
+    h("span", { class: "muted mono" }, (ev.t / 1000).toFixed(1) + "s"), thumb("frame", ev.seq),
+    h("span", { class: "mono" }, ev.p), h("span", { class: "muted" }, ev.n + " " + t("entries")), ...frameStatus(ev),
+    h("span", { class: "grow" }), h("button", { class: "btn", onclick: () => previewDialog(ev.p, () => getFrameRaw(ev.seq), "#" + ev.seq) }, t("Preview")))) : [h("span", { class: "muted" }, t("Nothing heard yet."))]));
+  hydrateWaves(box);
+}
+function draftEdit(id) { if (!S.edits.has(id)) S.edits.set(id, { name: "", kind: 0, dev: 0 }); return S.edits.get(id); }
+
+function renderRecord() {
+  const drafts = S.sigs.filter(s => s.st === ST.DRAFT).sort((a, b) => a.id - b.id);
+  const toggle = h("button", { class: "btn " + (S.rec ? "danger" : "primary"), onclick: async () => { await act(S.dev.call("record", { on: S.rec ? 0 : 1 })); S.rec = !S.rec; refresh(); } }, S.rec ? t("Stop recording") : t("Start recording"));
+  const list = h("textarea", { rows: 3, placeholder: "Power\nVolume up\nVolume down", "data-key": "bulk", style: "width:100%" });
+  const rows = drafts.map((d, i) => {
+    const e = draftEdit(d.id);
+    return h("tr", null,
+      h("td", { class: "mono muted" }, i + 1), h("td", null, thumb("sig", d.id)),
+      h("td", { class: "mono" }, d.p), h("td", null, d.n), h("td", null, "×" + d.hits),
+      h("td", null, h("input", { value: e.name, "data-key": "n" + d.id, placeholder: t("Name this signal"), oninput: ev => { e.name = ev.target.value; } })),
+      h("td", null, h("select", { onchange: ev => { e.kind = +ev.target.value; } }, h("option", { value: 0, selected: e.kind === 0 }, t("Appliance command")), h("option", { value: 1, selected: e.kind === 1 }, t("Remote key")))),
+      h("td", null, h("select", { onchange: ev => { e.dev = +ev.target.value; } }, h("option", { value: 0 }, t("(no device)")), S.devs.map(x => h("option", { value: x.id, selected: e.dev === x.id }, x.name)))),
+      h("td", null, h("div", { class: "row" },
+        h("button", { class: "btn", onclick: () => previewDialog(d.p, () => getRaw(d.id), "#" + d.id) }, t("Preview")),
+        h("button", { class: "btn danger", onclick: async () => { if (confirm(t("Delete draft?"))) { await act(S.dev.call("sig_del", { id: d.id })); S.edits.delete(d.id); refresh(); } } }, t("Delete")))));
+  });
+  const saveAll = async () => {
+    const todo = drafts.filter(d => draftEdit(d.id).name.trim());
+    if (!todo.length) return toast(t("Nothing to save: give the drafts names first."), true);
+    for (const d of todo) { const e = draftEdit(d.id); await act(S.dev.call("sig_put", { id: d.id, name: e.name.trim().slice(0, 31), kind: e.kind, dev: e.dev, state: 1 })); S.edits.delete(d.id); }
+    toast(t("Saved {n}", { n: todo.length })); await refresh();
+  };
+  return [
+    h("div", { class: "card" }, h("div", { class: "row" }, toggle, h("span", { class: "dot" + (S.rec ? " on" : "") })),
+      h("p", { class: "muted", style: "margin:0;max-width:78ch" }, t("Point any remote at the receiver and press keys. Each new key becomes a numbered draft; pressing the same key again only raises its counter. Name the drafts below to make them usable.")),
+      S.demo && h("div", { class: "row" }, h("span", { class: "chip warn" }, t("Demo mode: a simulated capsule runs in this page.")), h("span", { class: "muted" }, t("Simulate a remote key")),
+        ...["A", "B", "AC", "NEW"].map(k => h("button", { class: "btn", onclick: () => S.demo.hear(S.demo.keys[k]) }, k === "AC" ? t("AC state") : k === "NEW" ? "+" : t("Key " + k))))),
+    h("div", { class: "card" }, h("h2", null, t("Live frames")), h("div", { class: "live", id: "live" })),
+    h("div", { class: "card" }, h("h2", null, t("Drafts") + " (" + drafts.length + ")"),
+      drafts.length ? [
+        h("div", { class: "tablewrap" }, h("table", { class: "stack drafts" }, h("thead", null, h("tr", null, ["#", t("Wave"), "Protocol", t("Entries"), t("Heard"), t("Name"), t("Type"), t("Device"), ""].map(x => h("th", null, x)))), h("tbody", null, rows))),
+        h("div", { class: "row" }, h("button", { class: "btn primary", onclick: saveAll }, t("Save named drafts")), h("span", { class: "muted" }, t("Name needed before use"))),
+        h("details", null, h("summary", null, t("Fill names from a list")), h("p", { class: "muted" }, t("One name per line, applied in recording order to the drafts that have no name yet.")), list,
+          h("button", { class: "btn", onclick: () => { const names = list.value.split("\n").map(x => x.trim()).filter(Boolean); let i = 0; for (const d of drafts) { const e = draftEdit(d.id); if (!e.name && i < names.length) e.name = names[i++]; } render(); } }, t("Apply names"))),
+      ] : h("span", { class: "muted" }, t("No drafts. Start recording and press some keys."))),
+  ];
+}
+
+/* ---------- signals tab ---------- */
+function renderSignals() {
+  const saved = S.sigs.filter(s => s.st !== ST.DRAFT).sort((a, b) => (a.dev - b.dev) || a.id - b.id);
+  const addDev = h("button", { class: "btn", onclick: async () => { const n = prompt(t("Device name")); if (n) { await act(S.dev.call("dev_put", { name: n })); refresh(); } } }, t("Add device"));
+  const row = s => h("tr", { style: s.st === ST.OFF ? "opacity:.55" : "" },
+    h("td", null, h("strong", null, s.name), " ", h("span", { class: "chip" }, s.kind ? t("Remote key") : t("Appliance command"))),
+    h("td", null, devName(s.dev) || h("span", { class: "muted" }, "–")), h("td", null, thumb("sig", s.id)),
+    h("td", { class: "mono" }, s.p), h("td", null, s.n),
+    h("td", null, h("span", { class: "chip " + (s.st === ST.ACTIVE ? "ok" : "warn") }, s.st === ST.ACTIVE ? t("Active") : t("Disabled"))),
+    h("td", null, h("div", { class: "row" },
+      !s.kind && h("button", { class: "btn primary", disabled: s.st !== ST.ACTIVE, onclick: () => act(S.dev.call("fire", { id: s.id }), t("Signal sent")) }, t("Send")),
+      h("button", { class: "btn", onclick: () => previewDialog(s.name, () => getRaw(s.id), s.p) }, t("Preview")),
+      h("button", { class: "btn", onclick: async () => { await act(S.dev.call("sig_put", { id: s.id, state: s.st === ST.ACTIVE ? ST.OFF : ST.ACTIVE })); refresh(); } }, s.st === ST.ACTIVE ? t("Disable") : t("Enable")),
+      h("button", { class: "btn", onclick: async () => { const n = prompt(t("Rename signal"), s.name); if (n) { await act(S.dev.call("sig_put", { id: s.id, name: n.slice(0, 31) })); refresh(); } } }, t("Rename")),
+      h("button", { class: "btn danger", onclick: async () => { if (confirm(t("Delete signal?"))) { await act(S.dev.call("sig_del", { id: s.id })); refresh(); } } }, t("Delete")))));
+  return [h("div", { class: "card" }, h("div", { class: "row" }, h("h2", { style: "margin:0" }, t("Saved signals") + " (" + saved.length + ")"), h("span", { class: "grow" }), addDev),
+    saved.length ? h("div", { class: "tablewrap" }, h("table", { class: "stack sigs" }, h("thead", null, h("tr", null, [t("Name"), t("Device"), t("Wave"), "Protocol", t("Entries"), "", ""].map(x => h("th", null, x)))), h("tbody", null, saved.map(row))))
+      : h("span", { class: "muted" }, t("No saved signals yet. Record some and name them.")),
+    S.devs.length ? h("div", { class: "row" }, S.devs.map(d => h("span", { class: "chip" }, d.name, " ", h("a", { href: "#", title: t("Delete"), onclick: async e => { e.preventDefault(); await act(S.dev.call("dev_del", { id: d.id })); refresh(); } }, "×")))) : null)];
+}
+
+/* ---------- rules tab ---------- */
+function renderRules() {
+  const usable = S.sigs.filter(s => s.st !== ST.DRAFT);
+  const editor = S.ruleEdit;
+  const stepRow = (a, i) => {
+    const [ty, v] = a;
+    const sel = h("select", { onchange: e => { a[0] = +e.target.value; a[1] = a[0] === 0 ? (usable[0] ? usable[0].id : 0) : a[0] === 1 ? 500 : 0; render(); } },
+      h("option", { value: 0, selected: ty === 0 }, t("Send signal")), h("option", { value: 1, selected: ty === 1 }, t("Wait")), h("option", { value: 2, selected: ty === 2 }, t("Set layer")));
+    const val = ty === 0 ? h("select", { onchange: e => { a[1] = +e.target.value; } }, usable.filter(s => !s.kind).concat(usable.filter(s => s.kind)).map(s => h("option", { value: s.id, selected: s.id === v }, s.name)))
+      : h("input", { type: "number", min: 0, max: 65535, value: v, style: "width:100px", oninput: e => { a[1] = +e.target.value; } });
+    return h("div", { class: "row" }, h("span", { class: "muted mono" }, i + 1), sel, val, ty === 1 && h("span", { class: "muted" }, t("ms")),
+      h("button", { class: "btn", onclick: () => { editor.act.splice(i, 1); render(); } }, "×"));
+  };
+  const form = editor && h("div", { class: "card" }, h("h2", null, editor.id ? t("Edit") : t("New rule")),
+    h("div", { class: "row" }, h("input", { value: editor.name, placeholder: t("Rule"), "data-key": "rname", oninput: e => { editor.name = e.target.value; } }),
+      h("label", { class: "row muted" }, t("Layer"), h("input", { type: "number", min: 0, max: 15, value: editor.layer, style: "width:64px", oninput: e => { editor.layer = +e.target.value; } }))),
+    h("div", { class: "row" }, h("strong", null, t("When I hear")), h("select", { onchange: e => { editor.trig = +e.target.value; } }, h("option", { value: 0 }, t("(none)")), usable.filter(s => s.kind).concat(usable.filter(s => !s.kind)).map(s => h("option", { value: s.id, selected: s.id === editor.trig }, s.name)))),
+    h("div", null, h("strong", null, t("Then do")), editor.act.map(stepRow)),
+    h("div", { class: "row" }, h("button", { class: "btn", onclick: () => { editor.act.push([0, usable[0] ? usable[0].id : 0]); render(); } }, "+ " + t("Add step")),
+      h("span", { class: "grow" }),
+      h("button", { class: "btn", onclick: () => { S.ruleEdit = null; render(); } }, t("Cancel")),
+      h("button", { class: "btn primary", onclick: async () => { await act(S.dev.call("rule_put", { id: editor.id || 0, name: editor.name || "Rule", layer: editor.layer, trig: editor.trig, on: editor.on, act: editor.act.flat() }), t("Saved")); S.ruleEdit = null; refresh(); } }, t("Save"))));
+  const rows = S.rules.map(r => h("tr", { style: r.on ? "" : "opacity:.55" },
+    h("td", null, h("strong", null, r.name)), h("td", null, t("Layer") + " " + r.layer), h("td", null, sigName(r.trig)),
+    h("td", { class: "muted" }, (() => { const o = []; for (let i = 0; i + 1 < r.act.length; i += 2) o.push(r.act[i] === 0 ? sigName(r.act[i + 1]) : r.act[i] === 1 ? t("Wait") + " " + r.act[i + 1] + t("ms") : t("Set layer") + " " + r.act[i + 1]); return o.join(" → "); })()),
+    h("td", null, h("div", { class: "row" },
+      h("button", { class: "btn", onclick: () => act(S.dev.call("run", { id: r.id }), t("Run now")) }, t("Run now")),
+      h("button", { class: "btn", onclick: async () => { await act(S.dev.call("rule_put", { id: r.id, on: r.on ? 0 : 1 })); refresh(); } }, r.on ? t("Disable") : t("Enable")),
+      h("button", { class: "btn", onclick: () => { S.ruleEdit = { id: r.id, name: r.name, layer: r.layer, trig: r.trig, on: r.on, act: r.act.reduce((o, v, i) => (i % 2 ? o[o.length - 1].push(v) : o.push([v]), o), []) }; render(); } }, t("Edit")),
+      h("button", { class: "btn danger", onclick: async () => { if (confirm(t("Delete rule?"))) { await act(S.dev.call("rule_del", { id: r.id })); refresh(); } } }, t("Delete"))))));
+  return [h("div", { class: "card" }, h("div", { class: "row" }, h("h2", { style: "margin:0" }, t("Rules") + " (" + S.rules.length + ")"), h("span", { class: "grow" }),
+      !editor && h("button", { class: "btn primary", onclick: () => { S.ruleEdit = { id: 0, name: "", layer: S.layer, trig: 0, on: 1, act: [] }; render(); } }, "+ " + t("New rule"))),
+    h("p", { class: "muted", style: "margin:0;max-width:78ch" }, t("Rules react to a saved signal heard by the receiver (for example a key on a spare remote) and run a list of steps. Disabled rules and drafts never fire. Rules do not fire while recording.")),
+    S.rules.length ? h("div", { class: "tablewrap" }, h("table", { class: "stack rules" }, h("tbody", null, rows))) : h("span", { class: "muted" }, t("No rules yet."))),
+    form];
+}
+
+/* ---------- log tab ---------- */
+function logLine(e) { return h("div", null, h("span", { class: "t" }, (e.t / 1000).toFixed(1) + "s"), h("span", null, e.m)); }
+function renderLog() { const box = $("#logbox"); if (box) { box.replaceChildren(...S.logs.slice(-200).map(logLine)); box.scrollTop = box.scrollHeight; } }
+function renderLogView() {
+  const box = h("div", { class: "log", id: "logbox" }); setTimeout(renderLog, 0);
+  return [h("div", { class: "card" }, h("div", { class: "row" }, h("h2", { style: "margin:0" }, t("Device log")), h("span", { class: "grow" }), h("button", { class: "btn", onclick: () => { S.logs = []; renderLog(); } }, t("Clear"))), box)];
+}
+
+/* ---------- device tab ---------- */
+function meter(used, total) { return h("div", { class: "bar-meter" }, h("i", { style: "width:" + Math.min(100, 100 * used / total) + "%" })); }
+function renderDevice() {
+  const I = S.info || {}, nvsUsed = I.nvs ? I.nvs.used : 0, nvsTotal = I.nvs ? I.nvs.total : 1;
+  const nameIn = h("input", { value: I.name || "", maxlength: 23 }), dedupe = h("input", { type: "number", min: 0, max: 5000, value: I.dedupe, style: "width:100px" });
+  const layerIn = h("input", { type: "number", min: 0, max: 15, value: S.layer, style: "width:70px" });
+  return [
+    h("div", { class: "card" }, h("h2", null, t("Device")),
+      h("div", { class: "grid2" },
+        h("div", null, h("div", { class: "muted" }, t("Firmware")), h("div", { class: "mono" }, I.fw), h("div", { class: "muted" }, I.name)),
+        h("div", null, h("div", { class: "muted" }, t("Free heap")), h("div", { class: "mono" }, Math.round(I.heap / 1024) + " KB"), h("div", { class: "muted" }, t("Uptime") + " " + I.up + " s")),
+        h("div", null, h("div", { class: "muted" }, t("Storage")), meter(nvsUsed, nvsTotal), h("div", { class: "mono muted" }, `${I.ns}/${I.max.sig} ${t("signals")} · ${I.nr}/${I.max.rule} ${t("rules")} · ${I.drafts} ${t("drafts")}`)),
+        h("div", null, h("div", { class: "muted" }, t("Bluetooth MTU")), h("div", { class: "mono" }, I.mtu)))),
+    h("div", { class: "card" }, h("h2", null, t("Settings")),
+      h("div", { class: "row" }, h("label", { class: "row muted" }, t("Bluetooth name (applies after reboot)"), nameIn)),
+      h("div", { class: "row" }, h("label", { class: "row muted" }, t("Ignore repeats within (ms)"), dedupe)),
+      h("div", { class: "row" }, h("label", { class: "row muted" }, t("Active layer"), layerIn)),
+      h("div", { class: "row" }, h("button", { class: "btn primary", onclick: async () => { await act(S.dev.call("set", { name: nameIn.value, dedupe: +dedupe.value })); await act(S.dev.call("layer", { n: +layerIn.value }), t("Saved")); refresh(); } }, t("Save")))),
+    h("div", { class: "card" }, h("h2", null, t("LED test")),
+      h("p", { class: "muted", style: "margin:0;max-width:78ch" }, t("All LEDs blink for 60 s. Look through a phone camera (try the front one). Don't stare at them up close.")),
+      h("div", { class: "row" }, h("button", { class: "btn primary", onclick: () => act(S.dev.call("ledtest", { on: 1 })) }, t("Start LED test")),
+        h("button", { class: "btn", onclick: () => act(S.dev.call("ledtest", { on: 0 })) }, t("Stop")))),
+    h("div", { class: "card" }, h("h2", null, t("Backup")),
+      h("div", { class: "row" }, h("button", { class: "btn", onclick: exportBackup }, t("Export backup")),
+        h("label", { class: "btn", style: "cursor:pointer" }, t("Import backup"), h("input", { type: "file", accept: ".json,application/json", hidden: true, onchange: e => importBackup(e.target.files[0]) })))),
+    h("div", { class: "card" }, h("h2", null, t("Danger zone")),
+      h("div", { class: "row" }, h("button", { class: "btn", onclick: async () => { await act(S.dev.call("reboot")); if (S.link && S.link.close) S.link.close(); disconnected(); } }, t("Reboot")),
+        h("button", { class: "btn danger", onclick: async () => { if (confirm(t("This erases all signals, rules and devices on the capsule. Continue?"))) { await act(S.dev.call("reset", { confirm: 1 })); if (S.link && S.link.close) S.link.close(); disconnected(); } } }, t("Factory reset")))),
+  ];
+}
+
+async function exportBackup() {
+  toast(t("Exporting") + "…");
+  const sigs = []; for (const s of S.sigs.filter(x => x.st !== ST.DRAFT)) { const raw = await getRaw(s.id); sigs.push({ ...s, raw }); }
+  const data = { format: "ir-capsule-backup", version: 1, device: S.info.name, devices: S.devs, signals: sigs, rules: S.rules };
+  const a = h("a", { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" })), download: "ir-capsule-backup.json" });
+  document.body.append(a); a.click(); a.remove();
+}
+async function importBackup(file) {
+  if (!file) return;
+  const data = JSON.parse(await file.text()); if (data.format !== "ir-capsule-backup") return toast("Not a backup file", true);
+  toast(t("Importing") + "…");
+  const devMap = new Map(), sigMap = new Map();
+  for (const d of data.devices) devMap.set(d.id, (await S.dev.call("dev_put", { name: d.name })).id);
+  for (const s of data.signals) sigMap.set(s.id, (await S.dev.call("sig_put", { name: s.name, kind: s.kind, dev: devMap.get(s.dev) || 0, khz: s.khz, state: s.st, raw: s.raw })).id);
+  for (const r of data.rules) {
+    const act = []; for (let i = 0; i + 1 < r.act.length; i += 2) act.push(r.act[i], r.act[i] === 0 ? sigMap.get(r.act[i + 1]) : r.act[i + 1]);
+    if (act.some(x => x == null)) continue;
+    await S.dev.call("rule_put", { name: r.name, layer: r.layer, on: r.on, trig: sigMap.get(r.trig) || 0, act });
+  }
+  toast(t("Restored")); refresh();
+}
+
+/* ---------- boot ---------- */
+$("#lang").onclick = () => { lang = lang === "zh" ? "en" : "zh"; try { localStorage.setItem("lang", lang); } catch (e) {} applyLang(); };
+$("#disc").onclick = () => { if (S.link && S.link.close) S.link.close(); disconnected(); };
+function applyLang() {
+  $("#lang").textContent = lang === "zh" ? "English" : "中文"; document.documentElement.lang = lang === "zh" ? "zh-TW" : "en";
+  document.querySelectorAll("[data-i]").forEach(e => e.textContent = t(e.dataset.i)); setStatus(S.status); renderTabs(); render();
+}
+applyLang();
+(() => { const p = new URLSearchParams(location.search); if (p.get("demo") === "1") connect("demo"); else if (p.get("bridge") && p.get("auto") === "1") connect("ws", p.get("bridge")); })();
+</script>
+</body>
+</html>

@@ -1,0 +1,348 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IR Capsule Wiring</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: one column. Three figures (transmit, receive, ring layout) each followed by the table you solder from. */
+  :root {
+    --bg: #f6f7f4; --fg: #1a231f; --muted: #5c6a63; --line: #c9d1cb; --panel: #ecefe9;
+    --c5v: #b8321f; --c33: #1c62a8; --tx: #a85f00; --rx: #17744a; --gnd: #3b4742;
+    --s1: #1c62a8; --s2: #a85f00; --s3: #7a4aa8; --s4: #17744a;
+    --warn: #8a5a00; --warnbg: #f6ecd2;
+    --sans: "Inter", system-ui, -apple-system, "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1512; --fg: #e3ebe6; --muted: #98a7a0; --line: #2c3833; --panel: #17201c;
+      --c5v: #ff8f7a; --c33: #86bdf0; --tx: #f2b45e; --rx: #74d3a2; --gnd: #aebbb4;
+      --s1: #86bdf0; --s2: #f2b45e; --s3: #c3a2ee; --s4: #74d3a2;
+      --warn: #f2c66d; --warnbg: #2a2414; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1512; --fg: #e3ebe6; --muted: #98a7a0; --line: #2c3833; --panel: #17201c;
+    --c5v: #ff8f7a; --c33: #86bdf0; --tx: #f2b45e; --rx: #74d3a2; --gnd: #aebbb4;
+    --s1: #86bdf0; --s2: #f2b45e; --s3: #c3a2ee; --s4: #74d3a2;
+    --warn: #f2c66d; --warnbg: #2a2414; color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--fg); font-family: var(--sans); line-height: 1.6;
+         padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px));
+         padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  main { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+  h1 { font-size: 1.7rem; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  h2 { font-size: 1.15rem; margin: 0 0 6px; text-wrap: balance; }
+  p, li { max-width: 68ch; }
+  .lede { color: var(--muted); margin: 6px 0 0; }
+  section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  figure { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+  svg { display: block; width: 100%; min-width: 640px; height: auto; color: var(--fg); }
+  figcaption { color: var(--muted); font-size: 0.9rem; max-width: 76ch; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 0.8rem; letter-spacing: 0.04em; }
+  td.n, th.n { font-family: var(--mono); white-space: nowrap; }
+  code, .mono { font-family: var(--mono); font-size: 0.92em; }
+  .tablewrap { overflow-x: auto; min-width: 0; }
+  .note { background: var(--warnbg); color: var(--fg); border-left: 3px solid var(--warn); padding: 10px 14px; border-radius: 0 4px 4px 0; max-width: 76ch; }
+  .note b { color: var(--warn); }
+  ul.check { padding-left: 1.2em; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  /* svg parts */
+  .w { stroke: currentColor; stroke-width: 1.6; fill: none; }
+  .box { stroke: currentColor; stroke-width: 1.6; fill: var(--bg); }
+  .t { fill: currentColor; font-size: 12px; font-family: var(--sans); }
+  .tm { fill: currentColor; font-size: 11px; font-family: var(--mono); }
+  .tb { font-weight: 700; }
+  .dim { fill: var(--muted); }
+  .dot { fill: currentColor; }
+  .c5v { stroke: var(--c5v); } .c33 { stroke: var(--c33); } .ctx { stroke: var(--tx); } .crx { stroke: var(--rx); }
+  .f5v { fill: var(--c5v); } .f33 { fill: var(--c33); } .ftx { fill: var(--tx); } .frx { fill: var(--rx); }
+  .sym { stroke: currentColor; stroke-width: 1.6; fill: var(--bg); }
+  .ems { stroke: currentColor; stroke-width: 1.2; fill: none; }
+  .lg1 { fill: var(--s1); } .lg2 { fill: var(--s2); } .lg3 { fill: var(--s3); } .lg4 { fill: var(--s4); }
+</style>
+
+<main>
+  <header>
+    <h1>IR Capsule Wiring</h1>
+    <p class="lede">ESP32-C3 Super Mini, ULN2003APG, 8× IR333C-A and 1–4× VS1838B. Everything you need to solder once: transmit, receive and an optional expansion header.</p>
+  </header>
+
+  <section>
+    <h2>1&ensp;Transmit: GPIO5 → ULN2003 → 4 LED strings</h2>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 960 510" role="img" aria-label="GPIO5 drives ULN2003 inputs IN1 to IN4; outputs OUT1 to OUT4 each sink one string of two series IR LEDs, each string fed from 5V through 22 ohms">
+        <!-- 5V rail -->
+        <line class="w c5v" x1="170" y1="40" x2="800" y2="40"/>
+        <text class="t tb f5v" x="640" y="30">+5V</text>
+        <!-- Super Mini -->
+        <rect class="box" x="20" y="14" width="150" height="470" rx="6"/>
+        <text class="t tb" x="95" y="250" text-anchor="middle">ESP32-C3</text>
+        <text class="t tb" x="95" y="268" text-anchor="middle">Super Mini</text>
+        <text class="t dim" x="95" y="286" text-anchor="middle">USB-C powered</text>
+        <text class="tm" x="162" y="44" text-anchor="end">5V</text>
+        <text class="tm" x="162" y="204" text-anchor="end">GPIO5</text>
+        <text class="tm" x="162" y="459" text-anchor="end">GND</text>
+        <line class="w ctx" x1="170" y1="200" x2="235" y2="200"/>
+        <line class="w" x1="170" y1="455" x2="280" y2="455"/>
+
+        <!-- C1 -->
+        <line class="w c5v" x1="200" y1="40" x2="200" y2="68"/>
+        <line class="w" x1="186" y1="68" x2="214" y2="68"/>
+        <path class="w" d="M186 78 Q200 72 214 78"/>
+        <line class="w" x1="200" y1="76" x2="200" y2="96"/>
+        <text class="t" x="188" y="62" text-anchor="end">+</text>
+        <text class="tm" x="222" y="76">C1 100µF</text>
+        <line class="w" x1="190" y1="96" x2="210" y2="96"/><line class="w" x1="194" y1="101" x2="206" y2="101"/><line class="w" x1="198" y1="106" x2="202" y2="106"/>
+        <circle class="dot" cx="200" cy="40" r="3"/>
+        <!-- C2 -->
+        <line class="w c5v" x1="340" y1="40" x2="340" y2="62"/>
+        <line class="w" x1="328" y1="62" x2="352" y2="62"/>
+        <line class="w" x1="328" y1="70" x2="352" y2="70"/>
+        <line class="w" x1="340" y1="70" x2="340" y2="90"/>
+        <text class="tm" x="360" y="72">C2 0.1µF (104), optional</text>
+        <line class="w" x1="330" y1="90" x2="350" y2="90"/><line class="w" x1="334" y1="95" x2="346" y2="95"/><line class="w" x1="338" y1="100" x2="342" y2="100"/>
+        <circle class="dot" cx="340" cy="40" r="3"/>
+
+        <!-- ULN2003 -->
+        <rect class="box" x="280" y="118" width="120" height="360" rx="4"/>
+        <path class="w" d="M330 118 a10 10 0 0 0 20 0"/>
+        <text class="t tb" x="340" y="296" text-anchor="middle">ULN2003APG</text>
+        <text class="t dim" x="340" y="312" text-anchor="middle">DIP-16</text>
+        <g class="tm">
+          <text x="288" y="144">IN1</text><text x="288" y="189">IN2</text><text x="288" y="234">IN3</text><text x="288" y="279">IN4</text>
+          <text x="288" y="324">IN5</text><text x="288" y="369">IN6</text><text x="288" y="414">IN7</text><text x="288" y="459">GND</text>
+          <text x="392" y="144" text-anchor="end">OUT1</text><text x="392" y="189" text-anchor="end">OUT2</text><text x="392" y="234" text-anchor="end">OUT3</text><text x="392" y="279" text-anchor="end">OUT4</text>
+          <text x="392" y="324" text-anchor="end">OUT5</text><text x="392" y="369" text-anchor="end">OUT6</text><text x="392" y="414" text-anchor="end">OUT7</text><text x="392" y="459" text-anchor="end">COM</text>
+        </g>
+        <g class="tm dim" transform="translate(0,-7)">
+          <text x="270" y="144" text-anchor="end">1</text><text x="270" y="189" text-anchor="end">2</text><text x="270" y="234" text-anchor="end">3</text><text x="270" y="279" text-anchor="end">4</text>
+          <text x="270" y="324" text-anchor="end">5</text><text x="270" y="369" text-anchor="end">6</text><text x="270" y="414" text-anchor="end">7</text><text x="270" y="459" text-anchor="end">8</text>
+          <text x="410" y="144">16</text><text x="410" y="189">15</text><text x="410" y="234">14</text><text x="410" y="279">13</text>
+          <text x="410" y="324">12</text><text x="410" y="369">11</text><text x="410" y="414">10</text><text x="410" y="459">9</text>
+        </g>
+        <!-- inputs 1-4 tied, to GPIO5 -->
+        <g class="w ctx">
+          <line x1="235" y1="140" x2="235" y2="275"/>
+          <line x1="235" y1="140" x2="280" y2="140"/><line x1="235" y1="185" x2="280" y2="185"/>
+          <line x1="235" y1="230" x2="280" y2="230"/><line x1="235" y1="275" x2="280" y2="275"/>
+        </g>
+        <circle class="dot" cx="235" cy="185" r="3"/><circle class="dot" cx="235" cy="230" r="3"/><circle class="dot" cx="235" cy="200" r="3"/>
+        <!-- inputs 5-7 + pin8 to GND -->
+        <g class="w">
+          <line x1="255" y1="320" x2="255" y2="455"/>
+          <line x1="255" y1="320" x2="280" y2="320"/><line x1="255" y1="365" x2="280" y2="365"/><line x1="255" y1="410" x2="280" y2="410"/>
+        </g>
+        <circle class="dot" cx="255" cy="365" r="3"/><circle class="dot" cx="255" cy="410" r="3"/><circle class="dot" cx="255" cy="455" r="3"/>
+        <circle class="dot" cx="215" cy="455" r="3"/>
+        <line class="w" x1="215" y1="455" x2="215" y2="472"/>
+        <line class="w" x1="205" y1="472" x2="225" y2="472"/><line class="w" x1="209" y1="477" x2="221" y2="477"/><line class="w" x1="213" y1="482" x2="217" y2="482"/>
+
+        <!-- strings -->
+        <g id="strings">
+          <!-- S1 y=140 -->
+          <line class="w" x1="400" y1="140" x2="450" y2="140"/>
+          <path class="sym" d="M474 130 L474 150 L450 140 Z"/><line class="w" x1="450" y1="130" x2="450" y2="150"/>
+          <line class="w" x1="474" y1="140" x2="540" y2="140"/>
+          <path class="sym" d="M564 130 L564 150 L540 140 Z"/><line class="w" x1="540" y1="130" x2="540" y2="150"/>
+          <line class="w" x1="564" y1="140" x2="650" y2="140"/>
+          <rect class="sym" x="650" y="130" width="56" height="20"/><text class="tm" x="678" y="144" text-anchor="middle">22Ω</text>
+          <line class="w c5v" x1="706" y1="140" x2="800" y2="140"/>
+          <!-- S2 y=185 -->
+          <line class="w" x1="400" y1="185" x2="450" y2="185"/>
+          <path class="sym" d="M474 175 L474 195 L450 185 Z"/><line class="w" x1="450" y1="175" x2="450" y2="195"/>
+          <line class="w" x1="474" y1="185" x2="540" y2="185"/>
+          <path class="sym" d="M564 175 L564 195 L540 185 Z"/><line class="w" x1="540" y1="175" x2="540" y2="195"/>
+          <line class="w" x1="564" y1="185" x2="650" y2="185"/>
+          <rect class="sym" x="650" y="175" width="56" height="20"/><text class="tm" x="678" y="189" text-anchor="middle">22Ω</text>
+          <line class="w c5v" x1="706" y1="185" x2="800" y2="185"/>
+          <!-- S3 y=230 -->
+          <line class="w" x1="400" y1="230" x2="450" y2="230"/>
+          <path class="sym" d="M474 220 L474 240 L450 230 Z"/><line class="w" x1="450" y1="220" x2="450" y2="240"/>
+          <line class="w" x1="474" y1="230" x2="540" y2="230"/>
+          <path class="sym" d="M564 220 L564 240 L540 230 Z"/><line class="w" x1="540" y1="220" x2="540" y2="240"/>
+          <line class="w" x1="564" y1="230" x2="650" y2="230"/>
+          <rect class="sym" x="650" y="220" width="56" height="20"/><text class="tm" x="678" y="234" text-anchor="middle">22Ω</text>
+          <line class="w c5v" x1="706" y1="230" x2="800" y2="230"/>
+          <!-- S4 y=275 -->
+          <line class="w" x1="400" y1="275" x2="450" y2="275"/>
+          <path class="sym" d="M474 265 L474 285 L450 275 Z"/><line class="w" x1="450" y1="265" x2="450" y2="285"/>
+          <line class="w" x1="474" y1="275" x2="540" y2="275"/>
+          <path class="sym" d="M564 265 L564 285 L540 275 Z"/><line class="w" x1="540" y1="265" x2="540" y2="285"/>
+          <line class="w" x1="564" y1="275" x2="650" y2="275"/>
+          <rect class="sym" x="650" y="265" width="56" height="20"/><text class="tm" x="678" y="279" text-anchor="middle">22Ω</text>
+          <line class="w c5v" x1="706" y1="275" x2="800" y2="275"/>
+        </g>
+        <line class="w c5v" x1="800" y1="40" x2="800" y2="275"/>
+        <circle class="dot" cx="800" cy="40" r="3"/>
+        <circle class="dot" cx="800" cy="140" r="3"/><circle class="dot" cx="800" cy="185" r="3"/><circle class="dot" cx="800" cy="230" r="3"/>
+        <!-- string labels -->
+        <g class="tm">
+          <text x="462" y="120" text-anchor="middle">L5</text><text x="552" y="120" text-anchor="middle">L1</text><text x="678" y="120" text-anchor="middle">R1</text>
+          <text x="462" y="165" text-anchor="middle">L6</text><text x="552" y="165" text-anchor="middle">L2</text><text x="678" y="165" text-anchor="middle">R2</text>
+          <text x="462" y="210" text-anchor="middle">L7</text><text x="552" y="210" text-anchor="middle">L3</text><text x="678" y="210" text-anchor="middle">R3</text>
+          <text x="462" y="255" text-anchor="middle">L8</text><text x="552" y="255" text-anchor="middle">L4</text><text x="678" y="255" text-anchor="middle">R4</text>
+        </g>
+        <g class="t tb">
+          <text x="830" y="144" class="lg1">String S1</text><text x="830" y="189" class="lg2">String S2</text><text x="830" y="234" class="lg3">String S3</text><text x="830" y="279" class="lg4">String S4</text>
+        </g>
+        <!-- unused outputs -->
+        <g class="t dim">
+          <text x="440" y="324">OUT5–7 not connected</text><text x="440" y="459">COM (pin 9) not connected</text>
+        </g>
+        <text class="t dim" x="440" y="380">LED: triangle base (long lead, +) faces 5V, bar (short lead, −) faces the ULN.</text>
+        <text class="t dim" x="440" y="398">Current flows left: 5V → 22Ω → first LED → second LED → OUT.</text>
+      </svg>
+      </div>
+      <figcaption>GPIO5 drives ULN2003 inputs IN1–IN4 together (pins 1–4 joined), and each output sinks one string. IN5–IN7 are tied to GND (pin 8) so they cannot float. COM (pin 9) and OUT5–OUT7 are left open.</figcaption>
+    </figure>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th class="n">ULN pin</th><th>Name</th><th>Connect to</th></tr></thead>
+      <tbody>
+        <tr><td class="n">1, 2, 3, 4</td><td>IN1–IN4</td><td>Join all four together, then to <b>GPIO5</b></td></tr>
+        <tr><td class="n">5, 6, 7</td><td>IN5–IN7</td><td>GND</td></tr>
+        <tr><td class="n">8</td><td>GND</td><td>GND (common with the Super Mini GND)</td></tr>
+        <tr><td class="n">9</td><td>COM</td><td>Not connected</td></tr>
+        <tr><td class="n">10, 11, 12</td><td>OUT7–OUT5</td><td>Not connected</td></tr>
+        <tr><td class="n">13</td><td>OUT4</td><td>S4, second LED, short lead (−)</td></tr>
+        <tr><td class="n">14</td><td>OUT3</td><td>S3, second LED, short lead (−)</td></tr>
+        <tr><td class="n">15</td><td>OUT2</td><td>S2, second LED, short lead (−)</td></tr>
+        <tr><td class="n">16</td><td>OUT1</td><td>S1, second LED, short lead (−)</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="note"><b>No VCC pin:</b> that is correct. The ULN2003 is an array of Darlington transistors with no supply input; pin 8 is its ground and each load brings its own supply. <b>Capacitors:</b> C1 (100µF electrolytic, + lead to 5V, striped side to GND) is recommended: the LEDs pull about 240mA in 38kHz bursts and C1 keeps the USB rail steady so the C3 and Bluetooth are not disturbed. C2 is optional because the ULN2003 needs no decoupling of its own. Ceramic caps marked <b>104</b> are 0.1µF; <b>102</b> is only 1nF, so do not substitute it. A ceramic cap has no polarity: one lead to the supply (5V or 3V3), the other to GND.</div>
+    <p class="mono" style="margin:0;color:var(--muted)">Orientation: notch up. The left column runs pin 1 to 8 downward, the right column pin 9 to 16 upward, so pin 16 is top right.</p>
+    <div class="note"><b>Current:</b> per string about 5V − 0.9V (ULN drop) − 2×1.4V (LEDs) ≈ 1.3V across 22Ω, roughly 60mA; all four strings together peak near 240mA. A 38kHz carrier runs at about one third duty, so the average is lower. Use a USB supply rated at least 1A.</div>
+  </section>
+
+  <section>
+    <h2>2&ensp;Receive: VS1838B in parallel on GPIO4</h2>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 760 330" role="img" aria-label="Four VS1838B receivers: VCC to 3.3V, GND to ground, all outputs joined to GPIO4">
+        <g>
+          <!-- receiver 1..4 centers 130, 290, 450, 610 -->
+          <g id="rx1">
+            <rect class="box" x="85" y="60" width="90" height="70" rx="4"/><text class="t tb" x="130" y="90" text-anchor="middle">VS1838B</text><text class="t dim" x="130" y="108" text-anchor="middle">#1</text>
+            <line class="w crx" x1="105" y1="130" x2="105" y2="230"/><line class="w" x1="130" y1="130" x2="130" y2="170"/><line class="w c33" x1="155" y1="130" x2="155" y2="170"/>
+          </g>
+          <g id="rx2">
+            <rect class="box" x="245" y="60" width="90" height="70" rx="4"/><text class="t tb" x="290" y="90" text-anchor="middle">VS1838B</text><text class="t dim" x="290" y="108" text-anchor="middle">#2</text>
+            <line class="w crx" x1="265" y1="130" x2="265" y2="230"/><line class="w" x1="290" y1="130" x2="290" y2="170"/><line class="w c33" x1="315" y1="130" x2="315" y2="170"/>
+          </g>
+          <g id="rx3">
+            <rect class="box" x="405" y="60" width="90" height="70" rx="4"/><text class="t tb" x="450" y="90" text-anchor="middle">VS1838B</text><text class="t dim" x="450" y="108" text-anchor="middle">#3 (optional)</text>
+            <line class="w crx" x1="425" y1="130" x2="425" y2="230"/><line class="w" x1="450" y1="130" x2="450" y2="170"/><line class="w c33" x1="475" y1="130" x2="475" y2="170"/>
+          </g>
+          <g id="rx4">
+            <rect class="box" x="565" y="60" width="90" height="70" rx="4"/><text class="t tb" x="610" y="90" text-anchor="middle">VS1838B</text><text class="t dim" x="610" y="108" text-anchor="middle">#4 (optional)</text>
+            <line class="w crx" x1="585" y1="130" x2="585" y2="230"/><line class="w" x1="610" y1="130" x2="610" y2="170"/><line class="w c33" x1="635" y1="130" x2="635" y2="170"/>
+          </g>
+          <g class="tm">
+            <text x="105" y="124" text-anchor="middle" class="frx">OUT</text><text x="130" y="124" text-anchor="middle">GND</text><text x="155" y="124" text-anchor="middle" class="f33">VCC</text>
+          </g>
+          <!-- GPIO4 bus -->
+          <line class="w crx" x1="105" y1="230" x2="585" y2="230"/>
+          <circle class="dot" cx="265" cy="230" r="3"/><circle class="dot" cx="425" cy="230" r="3"/>
+          <line class="w crx" x1="105" y1="230" x2="40" y2="230"/>
+          <text class="tm tb frx" x="36" y="234" text-anchor="end">→ GPIO4</text>
+          <!-- labels at stub ends -->
+          <g class="tm">
+            <text x="130" y="186" text-anchor="middle">GND</text><text x="155" y="200" text-anchor="middle" class="f33">3V3</text>
+            <text x="290" y="186" text-anchor="middle">GND</text><text x="315" y="200" text-anchor="middle" class="f33">3V3</text>
+            <text x="450" y="186" text-anchor="middle">GND</text><text x="475" y="200" text-anchor="middle" class="f33">3V3</text>
+            <text x="610" y="186" text-anchor="middle">GND</text><text x="635" y="200" text-anchor="middle" class="f33">3V3</text>
+          </g>
+        </g>
+        <text class="t dim" x="40" y="285">Put a 0.1µF (marked 104) ceramic capacitor between VCC and GND on each receiver, right at its legs.</text>
+        <text class="t dim" x="40" y="305">Pin order varies by batch. This drawing assumes OUT, GND, VCC from left to right with the dome facing you. Check your part's datasheet.</text>
+      </svg>
+      </div>
+      <figcaption>Same-named pins of all receivers are joined: every VCC to 3V3, every GND to ground, all OUTs to one node on GPIO4. One receiver is enough to start; the others are optional spots for 360° coverage.</figcaption>
+    </figure>
+    <div class="note"><b>Check VCC:</b> power the VS1838B from <b>3V3</b>, never 5V. At 5V its output swings to 5V, above the C3's 3.6V pin limit, and can damage the GPIO. Before connecting OUT, confirm 3.3V on the VCC pin with a multimeter.</div>
+  </section>
+
+  <section>
+    <h2>3&ensp;Board pin summary</h2>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th class="n">Super Mini</th><th>Use</th><th>Connects to</th></tr></thead>
+      <tbody>
+        <tr><td class="n">5V</td><td>LED and ULN supply</td><td>5V rail: one end of each 22Ω ×4, C1, C2 (optional)</td></tr>
+        <tr><td class="n">3V3</td><td>Receiver supply</td><td>VS1838B VCC (and its 0.1µF)</td></tr>
+        <tr><td class="n">GND</td><td>Common ground</td><td>ULN pins 5–8, C1, C2 (optional), VS1838B GND</td></tr>
+        <tr><td class="n">GPIO4</td><td>IR receive</td><td>VS1838B OUT (joined)</td></tr>
+        <tr><td class="n">GPIO5</td><td>IR transmit</td><td>ULN pins 1–4 (joined)</td></tr>
+        <tr><td class="n">GPIO8</td><td>Status LED</td><td>On-board blue LED, nothing external</td></tr>
+        <tr><td class="n">GPIO9</td><td>BOOT button</td><td>On-board button, nothing external</td></tr>
+        <tr><td class="n">GPIO6, 7, 20, 21</td><td>Spare (optional)</td><td>6-pin header EXT: 3V3, GND, GPIO20, GPIO21, GPIO6, GPIO7 for future sensors. Skip it if you do not need it.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p style="margin:0;color:var(--muted)">GPIO2, GPIO8 and GPIO9 are strapping pins: do not attach external parts. GPIO20 and GPIO21 are the default UART pins, but this project's serial output goes over USB, so they are free.</p>
+  </section>
+
+  <section>
+    <h2>4&ensp;LED ring and receiver placement</h2>
+    <figure>
+      <div class="scroll">
+      <svg viewBox="0 0 560 400" role="img" aria-label="Eight LEDs every 45 degrees, opposite LEDs share a string; four receivers sit in the gaps between LEDs, separated by black baffles">
+        <circle class="w" cx="190" cy="200" r="130" stroke-dasharray="3 5" style="opacity:.5"/>
+        <g class="tm tb">
+          <!-- LEDs: angle -90 + 45*k ; r=130 ; center 190,200 -->
+          <circle class="lg1" cx="190" cy="70" r="15"/><text x="190" y="74" text-anchor="middle" style="fill:var(--bg)">L1</text>
+          <circle class="lg2" cx="281.9" cy="108.1" r="15"/><text x="281.9" y="112.1" text-anchor="middle" style="fill:var(--bg)">L2</text>
+          <circle class="lg3" cx="320" cy="200" r="15"/><text x="320" y="204" text-anchor="middle" style="fill:var(--bg)">L3</text>
+          <circle class="lg4" cx="281.9" cy="291.9" r="15"/><text x="281.9" y="295.9" text-anchor="middle" style="fill:var(--bg)">L4</text>
+          <circle class="lg1" cx="190" cy="330" r="15"/><text x="190" y="334" text-anchor="middle" style="fill:var(--bg)">L5</text>
+          <circle class="lg2" cx="98.1" cy="291.9" r="15"/><text x="98.1" y="295.9" text-anchor="middle" style="fill:var(--bg)">L6</text>
+          <circle class="lg3" cx="60" cy="200" r="15"/><text x="60" y="204" text-anchor="middle" style="fill:var(--bg)">L7</text>
+          <circle class="lg4" cx="98.1" cy="108.1" r="15"/><text x="98.1" y="112.1" text-anchor="middle" style="fill:var(--bg)">L8</text>
+        </g>
+        <!-- receivers at 22.5 + 90k from top: angles (-67.5, 22.5, 112.5, 202.5) from +x axis => -90+22.5=-67.5 -->
+        <g>
+          <rect class="sym" x="238.2" y="75.6" width="20" height="20" transform="rotate(22.5 248.2 85.6)"/>
+          <rect class="sym" x="298.8" y="230.2" width="20" height="20" transform="rotate(112.5 308.8 240.2)"/>
+          <rect class="sym" x="131.2" y="304.4" width="20" height="20" transform="rotate(202.5 141.2 314.4)"/>
+          <rect class="sym" x="71.2" y="149.8" width="20" height="20" transform="rotate(292.5 81.2 159.8)"/>
+        </g>
+        <g class="tm tb">
+          <text x="248.2" y="89.6" text-anchor="middle">R1</text><text x="308.8" y="244.2" text-anchor="middle">R2</text>
+          <text x="141.2" y="318.4" text-anchor="middle">R3</text><text x="81.2" y="163.8" text-anchor="middle">R4</text>
+        </g>
+        <text class="t tb" x="190" y="205" text-anchor="middle">Top view inside shell</text>
+        <!-- legend -->
+        <g class="t">
+          <circle class="lg1" cx="380" cy="90" r="8"/><text x="396" y="94">S1: L1 and L5 (opposite)</text>
+          <circle class="lg2" cx="380" cy="120" r="8"/><text x="396" y="124">S2: L2 and L6</text>
+          <circle class="lg3" cx="380" cy="150" r="8"/><text x="396" y="154">S3: L3 and L7</text>
+          <circle class="lg4" cx="380" cy="180" r="8"/><text x="396" y="184">S4: L4 and L8</text>
+          <rect class="sym" x="372" y="204" width="16" height="16"/><text x="396" y="217">R1–R4 receivers</text>
+        </g>
+        <text class="t dim" x="372" y="260">Place receivers in the gaps</text>
+        <text class="t dim" x="372" y="278">between LEDs, with black</text>
+        <text class="t dim" x="372" y="296">baffles on both sides.</text>
+      </svg>
+      </div>
+      <figcaption>One LED every 45°, with the two LEDs of a string placed opposite each other: if one string fails, the coverage gap stays symmetric instead of leaning to one side. Receivers sit between LEDs; baffles keep them from being saturated by the capsule's own emitters.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>5&ensp;Checks before power-on</h2>
+    <ul class="check">
+      <li>Multimeter, USB unplugged: 5V to GND must not be a short. The capacitors make the reading start low and climb; it only has to settle above 0Ω.</li>
+      <li>3V3 to 5V: not connected.</li>
+      <li>ULN2003 pin 8 connects to the Super Mini GND; pins 1, 2, 3, 4 connect to each other and to GPIO5; pins 5, 6, 7 connect to ground.</li>
+      <li>LED direction in every string: short lead (−) toward the ULN. A reversed LED will not light or be damaged, but the whole string stays dark.</li>
+      <li>Measure 3.3V on the VS1838B VCC pin before connecting OUT.</li>
+      <li>After soldering, check with a phone camera (many front cameras show infrared): each LED appears as a pale violet-white dot while transmitting, which confirms every string works.</li>
+    </ul>
+    <div class="note"><b>Tip:</b> use a DIP-16 socket for the ULN2003APG so the spare can be swapped in. Identify the LED leads before soldering: the long lead is the anode (+).</div>
+  </section>
+</main>
+</html>
