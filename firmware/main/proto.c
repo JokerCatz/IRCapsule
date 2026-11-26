@@ -17,6 +17,8 @@
 #include "remote.h"
 #include "jsonl.h"
 #include "store.h"
+#include "ui_store.h"
+#include "mbedtls/base64.h"
 
 #define FW_VERSION "0.2.0"
 #define LINE_MAX_LEN 12288
@@ -218,33 +220,47 @@ static void cmd_dev_del(tr_id_t tr, long q, const char *line)
     reply_simple(tr, q, NULL);
 }
 
+static bool tv_key_valid(uint16_t v)
+{
+    unsigned code = v & KEY_CODE_MASK;
+    if (v & ~(KEY_KB_PAGE | KEY_LONG | KEY_CODE_MASK)) return false;
+    return code >= 1 && (!(v & KEY_KB_PAGE) || code <= 0xFF);
+}
+
 static void cmd_rule_put(tr_id_t tr, long q, const char *line)
 {
-    long id = 0, v; js_int(line, "id", &id);
+    long id = 0, v, trig = 0; js_int(line, "id", &id);
+    if (id && !store_rule((uint16_t)id)) return reply_err(tr, q, "no such rule");
+    /* everything is checked before anything changes: a refused request leaves no trace */
+    bool have_trig = js_int(line, "trig", &trig);
+    if (have_trig && trig) {
+        sig_meta_t *ts = store_sig((uint16_t)trig);
+        if (!ts) return reply_err(tr, q, "trigger signal not found");
+        if (ts->state == ST_DRAFT) return reply_err(tr, q, "name and save the draft first");
+    }
+    uint16_t act[MAX_ACTIONS * 2];
+    int cnt = js_arr_u16(line, "act", act, MAX_ACTIONS * 2);
+    if (cnt > MAX_ACTIONS * 2) cnt = MAX_ACTIONS * 2;
+    for (int i = 0; i + 1 < cnt; i += 2) {
+        if (act[i] > ACT_KEY) return reply_err(tr, q, "bad action type");
+        if (act[i] == ACT_KEY && !tv_key_valid(act[i + 1])) return reply_err(tr, q, "bad tv key");
+        if (act[i] == ACT_FIRE) {
+            sig_meta_t *as = store_sig(act[i + 1]);
+            if (!as) return reply_err(tr, q, "action signal not found");
+            if (as->state == ST_DRAFT) return reply_err(tr, q, "name and save the draft first");
+        }
+    }
     rule_meta_t *r = id ? store_rule((uint16_t)id) : store_rule_alloc();
-    if (!r) return reply_err(tr, q, id ? "no such rule" : "rule table full");
+    if (!r) return reply_err(tr, q, "rule table full");
     char name[NAME_LEN];
     if (js_str(line, "name", name, sizeof name) && name[0]) copy_name(r->name, sizeof r->name, name);
     else if (!r->name[0]) snprintf(r->name, sizeof r->name, "Rule %u", r->id);
     if (js_int(line, "layer", &v)) r->layer = (uint8_t)v;
     if (js_int(line, "on", &v)) r->enabled = v ? 1 : 0;
-    if (js_int(line, "trig", &v)) {
-        sig_meta_t *ts = store_sig((uint16_t)v);
-        if (v && !ts) return reply_err(tr, q, "trigger signal not found");
-        if (ts && ts->state == ST_DRAFT) return reply_err(tr, q, "name and save the draft first");
-        r->trigger = (uint16_t)v;
-    }
-    uint16_t act[MAX_ACTIONS * 2];
-    int cnt = js_arr_u16(line, "act", act, MAX_ACTIONS * 2);
+    if (have_trig) r->trigger = (uint16_t)trig;
     if (cnt >= 0) {
         r->nact = 0;
         for (int i = 0; i + 1 < cnt; i += 2) {
-            if (act[i] > ACT_LAYER) return reply_err(tr, q, "bad action type");
-            if (act[i] == ACT_FIRE) {
-                sig_meta_t *as = store_sig(act[i + 1]);
-                if (!as) return reply_err(tr, q, "action signal not found");
-                if (as->state == ST_DRAFT) return reply_err(tr, q, "name and save the draft first");
-            }
             r->act[r->nact].type = (uint8_t)act[i];
             r->act[r->nact].val = act[i + 1];
             r->nact++;
@@ -279,7 +295,7 @@ static void cmd_log(tr_id_t tr, long q)
     tr_end(tr, &o);
 }
 
-/* The paired TV (BLE remote). op: status (default), pair, cancel, forget, compat (on=0/1). */
+/* The paired TV (BLE remote). op: status (default), pair, cancel, forget. */
 static void cmd_tv(tr_id_t tr, long q, const char *line)
 {
     char op[12] = "status";
@@ -287,15 +303,58 @@ static void cmd_tv(tr_id_t tr, long q, const char *line)
     if (!strcmp(op, "pair")) remote_pair(true);
     else if (!strcmp(op, "cancel")) remote_pair(false);
     else if (!strcmp(op, "forget")) remote_forget();
-    else if (!strcmp(op, "compat")) {
-        long on;
-        if (!js_int(line, "on", &on)) return reply_err(tr, q, "on required");
-        remote_set_compat(on != 0);
-    } else if (strcmp(op, "status")) return reply_err(tr, q, "unknown op");
+    else if (strcmp(op, "status")) return reply_err(tr, q, "unknown op");
     bool paired, connected; int window;
     remote_status(&paired, &connected, &window);
-    char extra[80]; snprintf(extra, sizeof extra, ",\"paired\":%d,\"connected\":%d,\"window\":%d,\"compat\":%d", paired, connected, window, remote_compat());
+    char extra[64]; snprintf(extra, sizeof extra, ",\"paired\":%d,\"connected\":%d,\"window\":%d", paired, connected, window);
     reply_simple(tr, q, extra);
+}
+
+/* Custom remotes. The bytes travel as base64, so the flat line parser never has to look inside them. */
+#define UI_B64_MAX (4 * ((UI_CAP + 2) / 3))
+static void cmd_ui(tr_id_t tr, long q, const char *cmd, const char *line)
+{
+    static uint8_t blob[UI_CAP];
+    static char b64[UI_B64_MAX + 8];                 /* one spare group, so that too long input is seen */
+    if (!strcmp(cmd, "ui_list")) {
+        out_t o; tr_begin(tr, &o);
+        out_printf(&o, "{\"q\":%ld,\"ok\":true,\"max\":%d,\"cap\":%d,\"slots\":[", q, UI_SLOTS, UI_CAP);
+        bool first = true;
+        for (int s = 1; s <= UI_SLOTS; s++) {
+            size_t n = ui_size(s);
+            if (!n) continue;
+            out_printf(&o, "%s{\"slot\":%d,\"size\":%u}", first ? "" : ",", s, (unsigned)n);
+            first = false;
+        }
+        out_puts(&o, "]}");
+        tr_end(tr, &o);
+        return;
+    }
+    long slot = 0;
+    js_int(line, "slot", &slot);
+    if (slot < 1 || slot > UI_SLOTS) return reply_err(tr, q, "bad slot");
+    if (!strcmp(cmd, "ui_del")) {
+        if (ui_del((int)slot) != ESP_OK) return reply_err(tr, q, "flash write failed");
+        return reply_simple(tr, q, NULL);
+    }
+    if (!strcmp(cmd, "ui_put")) {
+        if (!js_str(line, "data", b64, sizeof b64)) return reply_err(tr, q, "bad data");
+        size_t len = strlen(b64), n = 0;
+        if (len > UI_B64_MAX) return reply_err(tr, q, "too big");      /* js_str cuts long input: never store that */
+        int rc = mbedtls_base64_decode(blob, sizeof blob, &n, (const unsigned char *)b64, len);
+        if (rc == MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) return reply_err(tr, q, "too big");
+        if (rc || !n || len % 4) return reply_err(tr, q, "bad data");
+        if (ui_put((int)slot, blob, n) != ESP_OK) return reply_err(tr, q, "flash write failed");
+        return reply_simple(tr, q, NULL);
+    }
+    size_t n = 0, olen = 0;
+    if (!ui_size((int)slot) || ui_get((int)slot, blob, sizeof blob, &n) != ESP_OK) return reply_err(tr, q, "no such remote");
+    if (mbedtls_base64_encode((unsigned char *)b64, sizeof b64, &olen, blob, n)) return reply_err(tr, q, "no data");
+    out_t o; tr_begin(tr, &o);
+    out_printf(&o, "{\"q\":%ld,\"ok\":true,\"slot\":%ld,\"data\":\"", q, slot);
+    out_puts(&o, b64);
+    out_puts(&o, "\"}");
+    tr_end(tr, &o);
 }
 
 static void handle(const char *line, tr_id_t tr)
@@ -332,6 +391,8 @@ static void handle(const char *line, tr_id_t tr)
         int n = js_arr_u16(line, "raw", s_raw, MAX_RAW);
         if (n < 2) return reply_err(tr, q, "raw required");
         engine_enqueue_raw(s_raw, n, (uint16_t)khz) ? reply_simple(tr, q, NULL) : reply_err(tr, q, "busy");
+    } else if (!strcmp(cmd, "ui_list") || !strcmp(cmd, "ui_get") || !strcmp(cmd, "ui_put") || !strcmp(cmd, "ui_del")) {
+        cmd_ui(tr, q, cmd, line);
     } else if (!strcmp(cmd, "tv")) {
         cmd_tv(tr, q, line);
     } else if (!strcmp(cmd, "key")) {
@@ -373,7 +434,6 @@ static void handle(const char *line, tr_id_t tr)
         reply_simple(tr, q, NULL);
     } else if (!strcmp(cmd, "reset")) {
         if (!js_int(line, "confirm", &v) || !v) return reply_err(tr, q, "confirm required");
-        remote_set_compat(false);
         remote_forget();
         store_factory_reset();
         ilog("factory reset");

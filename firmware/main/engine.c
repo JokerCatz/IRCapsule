@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "ir_rmt.h"
+#include "remote.h"
 #include "transport.h"
 
 #define RING 6
@@ -23,7 +24,7 @@ static uint32_t s_logseq;
 static QueueHandle_t s_jobq;
 static volatile int64_t s_learn_until_us;
 static uint8_t s_layer;
-static int64_t s_last_fire_us[MAX_RULES];
+static int64_t s_last_match_us[MAX_RULES];   /* last frame that matched the rule's trigger */
 static volatile int64_t s_ledtest_until_us;
 static volatile bool s_ledtest_job;   /* a blink job is queued or running */
 static SemaphoreHandle_t s_frame_lock;   /* engine_on_frame uses static buffers; real and injected frames take turns */
@@ -211,8 +212,12 @@ void engine_on_frame(const uint16_t *raw_in, size_t n, int64_t t_us)
             if (store_sig_read_raw(r->trigger, tbuf, MAX_RAW, &tn) != ESP_OK) continue;
             if (!raw_match(raw, n, tbuf, tn)) continue;
             matched = r->id;
-            if (t_us - s_last_fire_us[i] < (int64_t)g_meta.dedupe_ms * 1000) break;
-            s_last_fire_us[i] = t_us;
+            /* One press, one run. A held NEC button sends short repeat frames, which never get here, so each
+             * full NEC frame is a press. Other remotes resend the whole frame while held: a new press needs a
+             * quiet gap, measured from the last matching frame, so holding never re-triggers. */
+            int64_t gap = t_us - s_last_match_us[i];
+            s_last_match_us[i] = t_us;
+            if (strncmp(proto, "NEC ", 4) && gap < (int64_t)g_meta.dedupe_ms * 1000) break;
             ilog("trigger \"%s\" -> rule \"%s\"", trig->name, r->name);
             engine_enqueue(JOB_RULE, r->id);
         }
@@ -320,6 +325,11 @@ static void exec_task(void *p)
                 if (ac.type == ACT_FIRE) fire_signal(ac.val, buf);
                 else if (ac.type == ACT_DELAY_MS) vTaskDelay(pdMS_TO_TICKS(ac.val));
                 else if (ac.type == ACT_LAYER) { engine_set_layer((uint8_t)ac.val); ilog("layer %u", ac.val); }
+                else if (ac.type == ACT_KEY) {
+                    const char *err = remote_raw(ac.val & KEY_KB_PAGE ? "kb" : "cc", ac.val & KEY_CODE_MASK,
+                                                 ac.val & KEY_LONG ? 1000 : REMOTE_KEY_MS);
+                    if (err) ilog("rule: tv key 0x%X skipped (%s)", ac.val, err);
+                }
             }
         }
     }

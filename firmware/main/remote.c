@@ -2,6 +2,7 @@
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_timer.h"
 #include "host/ble_hs.h"
 #include "host/ble_store.h"
@@ -58,11 +59,10 @@ static const key_def_t KEYS[] = {
 };
 
 /* PnP ID of the Device Information service: source 2 (USB), vendor, product, version, little endian.
- * Own: the shared V-USB ids. Compatibility mode (off by default) reports the ids of Google's reference
- * remote, so that Android applies that remote's key layout. It does not make this a Google device. */
-static const uint8_t PNP_OWN[]    = { 0x02, 0xC0, 0x16, 0xDF, 0x05, 0x00, 0x01 };
-static const uint8_t PNP_COMPAT[] = { 0x02, 0x57, 0x09, 0x01, 0x00, 0x01, 0x00 };
-static volatile bool s_compat;
+ * These are the ids of Google's reference remote: Android picks a key layout by them, and with that layout
+ * the whole remote, Input source included, works. The capsule is not a Google or certified product. */
+static const uint8_t PNP[] = { 0x02, 0x57, 0x09, 0x01, 0x00, 0x01, 0x00 };
+static SemaphoreHandle_t s_press_lock;   /* the web page and a rule may press keys at the same time */
 
 static ble_addr_t s_tv;              /* identity address of the paired TV */
 static bool s_has_tv;
@@ -81,7 +81,7 @@ static int hid_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt 
     static const uint8_t ref_kbd[] = { 1, 1 }, ref_cc[] = { 2, 1 };   /* report id, input */
     static const uint8_t zero[KBD_LEN] = { 0 };
     static const uint8_t battery = 100;
-    static const char manuf[] = "IRCapsule";
+    static const char manuf[] = "BLE Remote";
     if (c->op == BLE_GATT_ACCESS_OP_WRITE_CHR) return 0;               /* control point, protocol mode */
     const void *p = NULL; size_t n = 0;
     switch ((int)(intptr_t)arg) {
@@ -93,7 +93,7 @@ static int hid_access(uint16_t conn, uint16_t attr, struct ble_gatt_access_ctxt 
     case A_KBD_REF: p = ref_kbd; n = 2; break;
     case A_CC_REF:  p = ref_cc; n = 2; break;
     case A_BATT:    p = &battery; n = 1; break;
-    case A_PNP:     p = s_compat ? PNP_COMPAT : PNP_OWN; n = sizeof PNP_OWN; break;
+    case A_PNP:     p = PNP; n = sizeof PNP; break;
     case A_MANUF:   p = manuf; n = sizeof manuf - 1; break;
     default: return BLE_ATT_ERR_UNLIKELY;
     }
@@ -163,29 +163,15 @@ void remote_init(void)
     ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     close_window();
+    s_press_lock = xSemaphoreCreateMutex();
     const esp_timer_create_args_t t = { .callback = window_expired, .name = "pairwin" };
     ESP_ERROR_CHECK(esp_timer_create(&t, &s_window_timer));
     nvs_handle_t h;
     if (nvs_open("tvremote", NVS_READONLY, &h) == ESP_OK) {
         size_t n = sizeof s_tv;
         s_has_tv = nvs_get_blob(h, "peer", &s_tv, &n) == ESP_OK && n == sizeof s_tv;
-        uint8_t compat = 0;
-        nvs_get_u8(h, "compat", &compat);
-        s_compat = compat != 0;
         nvs_close(h);
     }
-}
-
-bool remote_compat(void) { return s_compat; }
-
-void remote_set_compat(bool on)
-{
-    if (on == s_compat) return;
-    s_compat = on;
-    nvs_handle_t h;
-    if (nvs_open("tvremote", NVS_READWRITE, &h) == ESP_OK) { nvs_set_u8(h, "compat", on); nvs_commit(h); nvs_close(h); }
-    ilog("tv: compatibility mode %s", on ? "on" : "off");
-    remote_forget();          /* a TV reads the ids when it pairs, so it has to pair again */
 }
 
 bool remote_is_tv(uint16_t conn)
@@ -274,13 +260,15 @@ static const char *press(uint8_t report, uint16_t code, const char *label, int h
     uint16_t handle = report == KB ? s_kbd_handle : s_cc_handle;
     if (report == KB) down[2] = (uint8_t)code;
     else { down[0] = code & 0xff; down[1] = code >> 8; }
+    xSemaphoreTake(s_press_lock, portMAX_DELAY);
     int a = notify(conn, handle, down, n);
     vTaskDelay(pdMS_TO_TICKS(hold_ms));
     int b = notify(conn, handle, up, n);
     if (a || b) { vTaskDelay(pdMS_TO_TICKS(40)); b = notify(conn, handle, up, n); }   /* never leave a key down */
+    xSemaphoreGive(s_press_lock);
     /* the code is logged so that a user's report tells exactly what was tried */
-    ilog("tv: key %s (%s 0x%X%s%s) %s", label, report == KB ? "kb" : "cc", code, hold_ms >= 500 ? " held" : "",
-         s_compat ? " compat" : "", !a && !b ? "sent" : "ERROR");
+    ilog("tv: key %s (%s 0x%X%s) %s", label, report == KB ? "kb" : "cc", code, hold_ms >= 500 ? " held" : "",
+         !a && !b ? "sent" : "ERROR");
     return !a && !b ? NULL : "send failed";
 }
 

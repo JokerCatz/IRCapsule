@@ -15,7 +15,11 @@
 enum { SIG_REAL = 0, SIG_TRIGGER = 1 };            /* a hint for the UI: sent to an appliance / heard from a remote */
 enum { ST_DRAFT = 0, ST_ACTIVE = 1, ST_DISABLED = 2 };  /* a draft has no name yet and cannot be used */
 #define MAX_DRAFTS 40
-enum { ACT_FIRE = 0, ACT_DELAY_MS = 1, ACT_LAYER = 2 };
+enum { ACT_FIRE = 0, ACT_DELAY_MS = 1, ACT_LAYER = 2, ACT_KEY = 3 };
+/* value of an ACT_KEY step: which TV key to press over Bluetooth */
+#define KEY_KB_PAGE   0x8000    /* keyboard page, else consumer page */
+#define KEY_LONG      0x4000    /* hold for 1 s */
+#define KEY_CODE_MASK 0x03FF
 
 typedef struct {
     uint16_t id;                /* 0 = free slot */

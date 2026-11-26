@@ -16,9 +16,6 @@ bool remote_pairing_open(void);
 void remote_pair(bool open);                   /* open: accept one new TV for 120 s */
 void remote_forget(void);
 void remote_status(bool *paired, bool *connected, int *window_s);
-bool remote_compat(void);
-void remote_set_compat(bool on);               /* changing it forgets the TV */
-
 #define REMOTE_KEY_MS      40                  /* a normal press */
 #define REMOTE_MAX_HOLD_MS 3000
 /* press and release; NULL when sent, else why not */
