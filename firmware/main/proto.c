@@ -14,6 +14,7 @@
 #include "nvs.h"
 #include "engine.h"
 #include "ir_rmt.h"
+#include "remote.h"
 #include "jsonl.h"
 #include "store.h"
 
@@ -278,6 +279,21 @@ static void cmd_log(tr_id_t tr, long q)
     tr_end(tr, &o);
 }
 
+/* The paired TV (BLE remote). op: status (default), pair, cancel, forget. */
+static void cmd_tv(tr_id_t tr, long q, const char *line)
+{
+    char op[12] = "status";
+    js_str(line, "op", op, sizeof op);
+    if (!strcmp(op, "pair")) remote_pair(true);
+    else if (!strcmp(op, "cancel")) remote_pair(false);
+    else if (!strcmp(op, "forget")) remote_forget();
+    else if (strcmp(op, "status")) return reply_err(tr, q, "unknown op");
+    bool paired, connected; int window;
+    remote_status(&paired, &connected, &window);
+    char extra[64]; snprintf(extra, sizeof extra, ",\"paired\":%d,\"connected\":%d,\"window\":%d", paired, connected, window);
+    reply_simple(tr, q, extra);
+}
+
 static void handle(const char *line, tr_id_t tr)
 {
     long q = 0, v;
@@ -312,6 +328,13 @@ static void handle(const char *line, tr_id_t tr)
         int n = js_arr_u16(line, "raw", s_raw, MAX_RAW);
         if (n < 2) return reply_err(tr, q, "raw required");
         engine_enqueue_raw(s_raw, n, (uint16_t)khz) ? reply_simple(tr, q, NULL) : reply_err(tr, q, "busy");
+    } else if (!strcmp(cmd, "tv")) {
+        cmd_tv(tr, q, line);
+    } else if (!strcmp(cmd, "key")) {
+        char k[12] = "";
+        js_str(line, "k", k, sizeof k);
+        const char *err = remote_key(k);
+        err ? reply_err(tr, q, err) : reply_simple(tr, q, NULL);
     } else if (!strcmp(cmd, "ledtest")) {
         v = 1; js_int(line, "on", &v);
         engine_ledtest(v) ? reply_simple(tr, q, NULL) : reply_err(tr, q, "busy");
@@ -338,6 +361,7 @@ static void handle(const char *line, tr_id_t tr)
         reply_simple(tr, q, NULL);
     } else if (!strcmp(cmd, "reset")) {
         if (!js_int(line, "confirm", &v) || !v) return reply_err(tr, q, "confirm required");
+        remote_forget();
         store_factory_reset();
         ilog("factory reset");
         reply_simple(tr, q, NULL);

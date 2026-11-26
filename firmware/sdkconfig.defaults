@@ -3,11 +3,16 @@ CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y
-CONFIG_BT_NIMBLE_MAX_CONNECTIONS=1
+# one web page + the TV, plus one spare
+CONFIG_BT_NIMBLE_MAX_CONNECTIONS=3
 CONFIG_BT_NIMBLE_ROLE_CENTRAL=n
 CONFIG_BT_NIMBLE_ROLE_OBSERVER=n
-# No pairing. With security enabled, hosts could bond, the keys were lost on reboot, and the stale bond broke later connections.
-CONFIG_BT_NIMBLE_SECURITY_ENABLE=n
+# Pairing serves the TV remote (remote.c). Bonds must persist: keys that are lost on reboot leave a stale
+# bond on the host, which breaks later connections. Room for several hosts, each with a few subscriptions.
+CONFIG_BT_NIMBLE_MAX_BONDS=6
+CONFIG_BT_NIMBLE_MAX_CCCDS=48
+CONFIG_BT_NIMBLE_SECURITY_ENABLE=y
+CONFIG_BT_NIMBLE_NVS_PERSIST=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"

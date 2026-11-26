@@ -40,6 +40,20 @@ spare remote (code your appliances ignore) ──IR──▶ [VS1838B ×1–4] �
 | RMT transmit with hardware carrier, self-reception guard | Implemented. **Not yet verified on a real appliance** |
 | Emitter ring (ULN2003 + 8 LEDs) | Built, being verified (LED test mode, `ledtest`). See [docs/wiring.html](docs/wiring.html) |
 
+## TV remote over Bluetooth
+
+For TV functions that have no infrared code (many Android / Google TV remotes send only Power as infrared),
+the capsule can pair with the TV as a Bluetooth remote (HID over GATT): direction keys, OK, Back, volume
+and mute. **Tested only with a Linux PC standing in for the TV; not yet confirmed on a real TV.**
+
+1. Open the config page, tab **TV remote**, press **Pair a TV**.
+2. Within 120 s, add a Bluetooth accessory on the TV and choose `IRCapsule-XXXX`.
+3. The page shows **TV connected**. The pairing survives reboots.
+
+Pair only after pressing the button. If the TV paired earlier, remove the capsule on the TV and start again.
+The page and the TV can be connected at the same time by design (not yet tested with two real devices).
+Waking a TV from standby this way should not be relied on.
+
 ## Config page
 
 Hosted with GitHub Pages: <https://jokercatz.github.io/IRCapsule/> ([demo without a device](https://jokercatz.github.io/IRCapsule/?demo=1),
@@ -153,7 +167,9 @@ docs/spec.zh-TW.md  Full design spec and discussion (Traditional Chinese)
   want (for example "Cool 26 °C", "Off"). Editing individual fields (temperature up/down) is not implemented.
 - Free heap after boot is about 85 KB (Bluetooth stack included). Storage holds 96 signals and 48 rules of up to
   1200 entries each; flash is not the limit, RAM is.
-- Anyone in Bluetooth range can connect and change settings: there is no pairing or PIN.
+- Anyone in Bluetooth range can connect, change settings and press keys on the paired TV: the config page
+  needs no pairing or PIN. Pairing is always accepted (Linux hosts require it), but key presses go only to the
+  TV chosen during the pairing window, which anyone in range can open.
 - Only record and replay remotes for devices you own or are allowed to control.
 
 ## License

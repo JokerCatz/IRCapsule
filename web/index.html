@@ -109,7 +109,7 @@ const ZH = {
   "Record":"錄製","Signals":"訊號","Rules":"對照","Log":"紀錄","Device":"裝置",
   "Start recording":"開始錄製","Stop recording":"停止錄製","Point any remote at the receiver and press keys. Each new key becomes a numbered draft; pressing the same key again only raises its counter. Name the drafts below to make them usable.":"對著接收頭按任何遙控器的鍵。每個新的鍵會成為一筆依序編號的草稿，重複按同一個鍵只會增加次數。在下方為草稿命名後才能使用。",
   "LED test":"LED 測試","Start LED test":"開始 LED 測試","Stop":"停止","All LEDs blink for 60 s. Look through a phone camera (try the front one). Don't stare at them up close.":"所有 LED 閃爍 60 秒。請用手機相機觀看（先試前鏡頭），不要近距離直視。",
-  "Live frames":"即時收到的訊號","Clear list":"清除清單","Nothing heard yet.":"還沒有收到訊號。","Drafts":"草稿","No drafts. Start recording and press some keys.":"沒有草稿。開始錄製並按幾個鍵吧。",
+  "Live frames":"即時收到的訊號","Clear list":"清除清單","TV remote":"電視遙控","No TV paired":"尚未配對電視","TV paired, not connected":"電視已配對，目前未連線","TV connected":"電視已連線","Waiting for the TV… {s} s left":"等待電視配對中… 剩 {s} 秒","Pair a TV (120 s)":"配對電視（120 秒）","Cancel pairing":"取消配對","Forget TV":"忘記電視","Forget the paired TV? Also remove the capsule in the TV's Bluetooth settings.":"要忘記已配對的電視嗎？電視的藍牙設定裡也要移除膠囊。","How to pair (order matters)":"配對步驟（順序很重要）","Press the button here first: Pair a TV.":"先按這裡的按鈕「配對電視」。","Then on the TV, add a Bluetooth accessory or remote and choose {name}.":"再到電視上新增藍牙配件或遙控器，選擇 {name}。","Wait until this page says TV connected.":"等到這個頁面顯示「電視已連線」。","If the TV paired before you pressed the button, remove {name} on the TV and start again. Do not pair other phones or computers while the countdown runs.":"如果按按鈕之前電視就已經配對了，請在電視上移除 {name} 後重來。倒數期間不要讓其他手機或電腦配對。","Remote":"遙控器","Up":"上","Down":"下","Left":"左","Right":"右","OK":"確定","Back":"返回","Volume −":"音量 −","Volume +":"音量 +","Mute":"靜音","OK (2nd way)":"確定（第二種）","Back (2nd way)":"返回（第二種）","If OK or Back does nothing on your TV, try the second way.":"如果「確定」或「返回」在電視上沒反應，請試第二種。","These keys go over Bluetooth. To switch the TV on or off, record its Power key and send it from the Signals tab (infrared).":"這些按鍵走藍牙。開關電視請錄下電源鍵，再到「訊號」分頁傳送（紅外線）。","This capsule's firmware has no TV remote. Flash the latest firmware.":"膠囊的韌體沒有電視遙控功能，請燒錄最新韌體。","Nothing heard yet.":"還沒有收到訊號。","Drafts":"草稿","No drafts. Start recording and press some keys.":"沒有草稿。開始錄製並按幾個鍵吧。",
   "Fill names from a list":"用清單批次命名","One name per line, applied in recording order to the drafts that have no name yet.":"每行一個名稱，依錄製順序套用到還沒命名的草稿。",
   "Apply names":"套用名稱","Save named drafts":"儲存已命名的草稿","Delete":"刪除","Name":"名稱","Type":"類型","Device":"裝置","Wave":"波形","Heard":"次數","Name this signal":"為這個訊號命名",
   "Appliance command":"家電指令","Remote key":"遙控器按鍵","(no device)":"（無）","Preview":"預覽","New draft":"新草稿","Draft":"草稿","Known":"已儲存","Triggered":"已觸發","Ignored":"忽略",
@@ -309,6 +309,20 @@ class MockLink extends Link {
       case "log": return ok({ log: S.log.slice(-48) });
       case "reset": S.sigs = []; S.rules = []; S.devs = []; return ok();
       case "reboot": return ok();
+      case "tv": {
+        const v = this.tv || (this.tv = { paired: 0, connected: 0, until: 0 });
+        const done = () => { clearTimeout(this.tvTimer); v.until = 0; };
+        if (m.op === "pair") { done(); v.until = Date.now() + 120000; this.logm("tv: pairing window open for 120 s");
+          this.tvTimer = setTimeout(() => { v.paired = v.connected = 1; v.until = 0; this.logm("tv: paired and connected"); }, 4000); }
+        else if (m.op === "cancel") { if (v.until) this.logm("tv: pairing window closed"); done(); }
+        else if (m.op === "forget") { done(); if (v.paired) this.logm("tv: forgotten"); v.paired = v.connected = 0; }
+        return ok({ paired: v.paired, connected: v.connected, window: Math.max(0, Math.ceil((v.until - Date.now()) / 1000)) });
+      }
+      case "key": {
+        if (!["up", "down", "left", "right", "ok", "ok2", "back", "back2", "volup", "voldown", "mute"].includes(m.k)) return err("unknown key");
+        if (!(this.tv && this.tv.connected)) return err("TV not connected");
+        this.logm("tv: key " + m.k + " sent"); return ok();
+      }
       case "ledtest": {
         const on = !!(m.on ?? 1), was = !!this.ledTimer; clearTimeout(this.ledTimer); this.ledTimer = 0;
         if (on) { this.ledTimer = setTimeout(() => { this.ledTimer = 0; this.logm("led test off"); }, 60000); if (!was) this.logm("led test on"); }
@@ -455,6 +469,7 @@ function onEvent(ev) {
   } else if (ev.ev === "log") {
     S.logs.push(ev); if (S.logs.length > 300) S.logs.shift();
     if (S.tab === "log") renderLog();
+    if (/^tv: (paired|reconnected|disconnected|forgotten|pairing)/.test(ev.m)) pollTv();
     if (/saved|deleted|layer|recording|draft/.test(ev.m)) refreshSoon();
   }
 }
@@ -485,6 +500,7 @@ function bluetoothNote() {
 async function connect(kind, url) {
   setStatus("connecting…");
   S.bleDrop = "";
+  S.tv = null;
   let link;
   try {
     if (kind === "ble") link = new BleLink(); else if (kind === "serial") link = new SerialLink(); else if (kind === "ws") link = new WsLink(); else { link = new MockLink(); S.demo = link; }
@@ -505,7 +521,7 @@ async function connect(kind, url) {
     S.link = null; S.dev = null; setStatus("disconnected"); if (e.name !== "NotFoundError") toast(e.message || String(e), true); render();
   }
 }
-function disconnected() { clearLive(); S.link = null; S.dev = null; S.demo = null; setStatus("disconnected"); renderTabs(); render(); }
+function disconnected() { S.tv = null; clearLive(); S.link = null; S.dev = null; S.demo = null; setStatus("disconnected"); renderTabs(); render(); }
 function setStatus(s, extra) {
   S.status = s; const el = $("#status");
   el.textContent = t(s) + (extra ? " · " + extra : ""); el.className = "chip " + (s === "connected" ? "ok" : s === "connecting…" ? "warn" : "");
@@ -513,7 +529,7 @@ function setStatus(s, extra) {
 }
 
 /* ---------- tabs ---------- */
-const TABS = [["record", "Record"], ["signals", "Signals"], ["rules", "Rules"], ["log", "Log"], ["device", "Device"]];
+const TABS = [["tv", "TV remote"], ["record", "Record"], ["signals", "Signals"], ["rules", "Rules"], ["log", "Log"], ["device", "Device"]];
 function renderTabs() {
   const nav = $("#tabs"); nav.hidden = !S.dev;
   nav.replaceChildren(...TABS.map(([k, label]) => h("button", { role: "tab", "aria-selected": S.tab === k, onclick: () => { S.tab = k; renderTabs(); render(); } },
@@ -527,7 +543,7 @@ function render() {
   if (!S.dev) app.replaceChildren(renderLanding());
   else {
     renderTabs();
-    app.replaceChildren(...({ record: renderRecord, signals: renderSignals, rules: renderRules, log: renderLogView, device: renderDevice }[S.tab])().filter(Boolean));
+    app.replaceChildren(...({ tv: renderTv, record: renderRecord, signals: renderSignals, rules: renderRules, log: renderLogView, device: renderDevice }[S.tab])().filter(Boolean));
     hydrateWaves(app);
     if (S.tab === "record") renderLive();
   }
@@ -547,6 +563,53 @@ function renderLanding() {
     S.bleDrop && bluetoothDroppedNote(),
     bluetoothNote(),
   );
+}
+
+/* ---------- TV remote tab ---------- */
+let tvBusy = false;
+async function pollTv() {
+  if (!S.dev || tvBusy) return;
+  tvBusy = true;
+  const dev = S.dev;
+  let next;
+  try { const r = await dev.call("tv"); next = { paired: r.paired, connected: r.connected, window: r.window }; }
+  catch (e) { next = /unknown cmd/.test(e.message) ? { unsupported: true } : S.tv; }
+  tvBusy = false;
+  if (S.dev !== dev || JSON.stringify(next) === JSON.stringify(S.tv)) return;
+  S.tv = next;
+  if (S.tab === "tv") render();
+}
+setInterval(() => { if (S.dev && S.tab === "tv") pollTv(); }, 2000);
+async function tvOp(op) { await act(S.dev.call("tv", { op })); await pollTv(); }
+
+function renderTv() {
+  const v = S.tv;
+  if (!v) { pollTv(); return [h("div", { class: "card" }, "…")]; }
+  if (v.unsupported) return [h("div", { class: "card" }, h("div", { class: "note" }, t("This capsule's firmware has no TV remote. Flash the latest firmware.")))];
+  const name = (S.info && S.info.name) || "IRCapsule";
+  const status = v.window ? t("Waiting for the TV… {s} s left", { s: v.window }) : v.connected ? t("TV connected") : v.paired ? t("TV paired, not connected") : t("No TV paired");
+  const key = (k, label, area) => h("button", { class: "btn" + (k === "ok" ? " primary" : ""), style: "min-height:58px;font-size:1.05rem" + (area ? ";grid-area:" + area : ""), disabled: !v.connected,
+    onclick: () => act(S.dev.call("key", { k })) }, t(label));
+  const grid = (areas, ...kids) => h("div", { style: "display:grid;gap:8px;max-width:380px;width:100%;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-areas:" + areas }, ...kids);
+  return [
+    h("div", { class: "card" }, h("h2", null, t("TV remote")),
+      h("div", { class: "row" }, h("span", { class: "chip " + (v.connected ? "ok" : v.window ? "warn" : "") }, status)),
+      h("div", { class: "row" },
+        v.window ? h("button", { class: "btn", onclick: () => tvOp("cancel") }, t("Cancel pairing"))
+          : h("button", { class: "btn" + (v.paired ? "" : " primary"), onclick: () => tvOp("pair") }, t("Pair a TV (120 s)")),
+        v.paired ? h("button", { class: "btn danger", onclick: () => { if (confirm(t("Forget the paired TV? Also remove the capsule in the TV's Bluetooth settings."))) tvOp("forget"); } }, t("Forget TV")) : null)),
+    h("div", { class: "card" }, h("h2", null, t("Remote")),
+      grid("'. up .' 'left ok right' '. down .'", key("up", "Up", "up"), key("left", "Left", "left"), key("ok", "OK", "ok"), key("right", "Right", "right"), key("down", "Down", "down")),
+      grid("'back back back'", key("back", "Back", "back")),
+      grid("'a b c'", key("voldown", "Volume −"), key("mute", "Mute"), key("volup", "Volume +")),
+      h("p", { class: "muted", style: "margin:0;max-width:78ch" }, t("If OK or Back does nothing on your TV, try the second way.")),
+      h("div", { class: "row" }, key("ok2", "OK (2nd way)"), key("back2", "Back (2nd way)")),
+      h("p", { class: "muted", style: "margin:0;max-width:78ch" }, t("These keys go over Bluetooth. To switch the TV on or off, record its Power key and send it from the Signals tab (infrared)."))),
+    h("div", { class: "card" }, h("h2", null, t("How to pair (order matters)")),
+      h("ol", { style: "margin:0;padding-left:1.3em;max-width:70ch" }, h("li", null, t("Press the button here first: Pair a TV.")),
+        h("li", null, t("Then on the TV, add a Bluetooth accessory or remote and choose {name}.", { name })), h("li", null, t("Wait until this page says TV connected."))),
+      h("div", { class: "note" }, t("If the TV paired before you pressed the button, remove {name} on the TV and start again. Do not pair other phones or computers while the countdown runs.", { name }))),
+  ];
 }
 
 /* ---------- record tab ---------- */

@@ -40,7 +40,11 @@ async def main(prefix="IRCapsule"):
         L = await call("list"); check("list", L["ok"] and len(L["sig"]) >= 1, L); print("   signals", [(s["id"], s["name"], s["n"]) for s in L["sig"]])
         big = max(L["sig"], key=lambda s: s["n"])
         g = await call("get", id=big["id"]); check(f"get {big['n']}-entry signal over BLE", g["ok"] and len(g["raw"]) == big["n"], g.get("n"))
-        r = await call("fire", id=L["sig"][0]["id"]); check("fire", r["ok"], r)
+        had = {s["id"] for s in L["sig"]}            # the user's data: never delete or change these
+        active = [s for s in L["sig"] if s["st"] == 1]
+        if active:
+            r = await call("fire", id=active[0]["id"]); check("fire", r["ok"], r)
+        else: print("SKIP fire (no active signal stored; this transmits it for real)")
         # a big write: save a copy of the big signal under a new name through BLE
         r = await call("sig_put", name="ble copy", kind=0, state=1, raw=g["raw"]); check(f"write {len(g['raw'])} entries over BLE", r["ok"], r)
         if r["ok"]:
@@ -57,7 +61,8 @@ async def main(prefix="IRCapsule"):
         except asyncio.TimeoutError: pass
         await call("record", on=0)
         check("frame event arrives over BLE (no raw)", ev and "raw" not in ev, ev)
-        if ev and ev.get("draft"): await call("sig_del", id=ev["draft"])
+        # the injected frame may match a draft that was already there: only delete one this run created
+        if ev and ev.get("draft") and ev["draft"] not in had: await call("sig_del", id=ev["draft"])
     print("\nALL PASS" if ok else "\nSOME FAILED"); return 0 if ok else 1
 
 sys.exit(asyncio.run(main(*(sys.argv[1:2]))))
