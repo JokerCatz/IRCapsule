@@ -121,7 +121,7 @@ const ZH = {
   "Settings":"設定","Bluetooth name (applies after reboot)":"藍牙名稱（重開機後生效）","Ignore repeats within (ms)":"忽略重複觸發的間隔（毫秒）","Active layer":"目前圖層",
   "Backup":"備份","Export backup":"匯出備份","Import backup":"匯入備份","Exporting":"匯出中","Importing":"匯入中","Reboot":"重開機","Factory reset":"恢復原廠設定","This erases all signals, rules and devices on the capsule. Continue?":"這會清除膠囊上所有的訊號、規則與裝置。要繼續嗎？",
   "Danger zone":"危險操作","Signal sent":"已發射","Saved":"已儲存","Failed":"失敗","Heard x":"收到次數","entries":"筆","Total":"總長","Waveform":"波形","Linear time":"線性時間軸","Squeezed (long gaps shortened)":"壓縮（縮短長間隔）","Zoom":"縮放","Copy timings":"複製時間資料",
-  "Unsupported in this browser.":"此瀏覽器不支援。","Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy.":"Web Bluetooth 需要 Chrome 或 Edge（Android/桌面）。iPhone 請使用 Bluefy 等瀏覽器。",
+  "Unsupported in this browser.":"此瀏覽器不支援。","Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy.":"Web Bluetooth 需要 Chrome 或 Edge（Android/桌面）。iPhone 請使用 Bluefy 等瀏覽器。","Web Bluetooth only works on an https:// page (or localhost).":"Web Bluetooth 只能在 https:// 網頁（或 localhost）使用。","On iPhone and iPad, Chrome and Safari have no Web Bluetooth. Use a browser such as Bluefy.":"iPhone 與 iPad 上的 Chrome 和 Safari 沒有 Web Bluetooth。請使用 Bluefy 等瀏覽器。","Open this page in Chrome itself. Browsers inside other apps (such as LINE) have no Web Bluetooth.":"請直接用 Chrome 開啟本頁。其他 App（例如 LINE）內建的瀏覽器沒有 Web Bluetooth。","Chrome on Linux has Web Bluetooth switched off. Paste this into the address bar, set it to Enabled, then press Relaunch:":"Linux 版 Chrome 預設關閉 Web Bluetooth。請把下面這行貼到網址列，改成 Enabled，再按 Relaunch：","This also enables other experimental features; you can set it back to Default later. Or plug in the cable and use USB serial.":"這也會開啟其他實驗功能，之後可以改回 Default。也可以接上傳輸線，改用「USB 序列埠」。","Capsule not in the list? Check that Bluetooth is on and that no other phone or tab is already connected to it.":"清單裡找不到膠囊？請確認藍牙已開啟，而且沒有其他手機或分頁正連著它。",
   "Web Serial needs desktop Chrome or Edge.":"Web Serial 需要桌面版 Chrome 或 Edge。","Demo mode: a simulated capsule runs in this page.":"示範模式：此頁面內執行的是模擬的膠囊。",
   "Simulate a remote key":"模擬按下遙控器的鍵","Key A":"按鍵 A","Key B":"按鍵 B","AC state":"冷氣狀態",
   "drafts":"草稿","signals":"訊號","rules":"規則","Name needed before use":"需要先命名才能使用","Saved {n}":"已儲存 {n} 筆","Nothing to save: give the drafts names first.":"沒有可儲存的項目，請先替草稿命名。",
@@ -188,7 +188,7 @@ class Link {
 }
 class BleLink extends Link {
   async open() {
-    if (!navigator.bluetooth) throw new Error(t("Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy."));
+    if (!navigator.bluetooth) throw new Error(bluetoothHelp().filter(Boolean).join(" "));
     this.dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }, { namePrefix: "IRCapsule" }], optionalServices: [SVC] });
     this.name = this.dev.name || "IR Capsule";
     this.dev.addEventListener("gattserverdisconnected", () => this.onClose());
@@ -458,6 +458,23 @@ function onEvent(ev) {
 }
 
 /* ---------- connect / disconnect ---------- */
+/* Why navigator.bluetooth is missing, per platform: [text, flag to paste or "", extra text or ""]. */
+function bluetoothHelp() {
+  const ua = navigator.userAgent;
+  if (!window.isSecureContext) return [t("Web Bluetooth only works on an https:// page (or localhost)."), "", ""];
+  if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return [t("On iPhone and iPad, Chrome and Safari have no Web Bluetooth. Use a browser such as Bluefy."), "", ""];
+  if (/Android/.test(ua)) return [t("Open this page in Chrome itself. Browsers inside other apps (such as LINE) have no Web Bluetooth."), "", ""];
+  if (/Linux/.test(ua) && !/CrOS/.test(ua)) return [t("Chrome on Linux has Web Bluetooth switched off. Paste this into the address bar, set it to Enabled, then press Relaunch:"), "chrome://flags/#enable-experimental-web-platform-features", t("This also enables other experimental features; you can set it back to Default later. Or plug in the cable and use USB serial.")];
+  return [t("Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy."), "", ""];
+}
+function bluetoothNote() {
+  if (navigator.bluetooth) return h("p", { class: "muted", style: "margin:0" }, t("Capsule not in the list? Check that Bluetooth is on and that no other phone or tab is already connected to it."));
+  const [text, flag, extra] = bluetoothHelp();
+  return h("div", { class: "note" }, h("div", null, text),
+    flag ? h("div", { class: "mono", style: "user-select:all;overflow-wrap:anywhere;margin:6px 0" }, flag) : null,
+    extra ? h("div", null, extra) : null);
+}
+
 async function connect(kind, url) {
   setStatus("connecting…");
   let link;
@@ -517,7 +534,7 @@ function renderLanding() {
       h("button", { class: "btn", onclick: () => connect("serial") }, t("USB serial")),
       h("button", { class: "btn", onclick: () => connect("demo") }, t("Demo (no device)")),
       bridge && h("button", { class: "btn", onclick: () => connect("ws", bridge) }, "Bridge")),
-    !navigator.bluetooth && h("div", { class: "note" }, t("Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy.")),
+    bluetoothNote(),
   );
 }
 

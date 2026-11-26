@@ -44,6 +44,8 @@ spare remote (code your appliances ignore) ──IR──▶ [VS1838B ×1–4] �
 
 Hosted with GitHub Pages: <https://jokercatz.github.io/IRCapsule/> ([demo without a device](https://jokercatz.github.io/IRCapsule/?demo=1),
 [wiring diagram](https://jokercatz.github.io/IRCapsule/docs/wiring.html)). Bluetooth and USB need Chrome or Edge.
+On Linux, Web Bluetooth is off by default: enable `chrome://flags/#enable-experimental-web-platform-features`
+and relaunch the browser, or use USB.
 
 ## Hardware
 
