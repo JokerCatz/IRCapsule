@@ -47,7 +47,12 @@ static void send_to(tr_id_t t, const char *json)
 {
     if (!tr_ready(t)) return;
     out_t o;
-    tr_begin(t, &o);
+    if (t == TR_BLE && ble_in_host_task()) {
+        /* The Bluetooth host task must never wait here: whoever is sending a long reply needs that task to
+         * free buffers. Drop the event instead (log lines stay in the device log). */
+        if (xSemaphoreTake(s_lock[t], 0) != pdTRUE) return;
+        out_init(&o, ble_sink, NULL);
+    } else tr_begin(t, &o);
     out_puts(&o, json);
     tr_end(t, &o);
 }

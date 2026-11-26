@@ -15,6 +15,7 @@
 #include "engine.h"
 #include "ir_rmt.h"
 #include "remote.h"
+#include "secure.h"
 #include "jsonl.h"
 #include "store.h"
 #include "ui_store.h"
@@ -70,11 +71,11 @@ static void cmd_info(tr_id_t tr, long q)
     out_printf(&o, "{\"q\":%ld,\"ok\":true,\"fw\":\"%s\",\"name\":", q, FW_VERSION);
     out_jstr(&o, g_meta.device_name[0] ? g_meta.device_name : "IRCapsule");
     out_printf(&o, ",\"heap\":%u,\"minheap\":%u,\"up\":%lld,\"layer\":%u,\"rec\":%d,\"ns\":%d,\"nr\":%d,\"nd\":%d,\"drafts\":%d,"
-                   "\"dedupe\":%u,\"mtu\":%d,\"nvs\":{\"used\":%u,\"free\":%u,\"total\":%u},"
+                   "\"access\":%d,\"dedupe\":%u,\"mtu\":%d,\"nvs\":{\"used\":%u,\"free\":%u,\"total\":%u},"
                    "\"max\":{\"sig\":%d,\"rule\":%d,\"dev\":%d,\"raw\":%d,\"act\":%d}}",
                (unsigned)esp_get_free_heap_size(), (unsigned)esp_get_minimum_free_heap_size(),
                (long long)(esp_timer_get_time() / 1000000), engine_layer(), engine_recording(), ns, nr, nd, ndr,
-               g_meta.dedupe_ms, g_ble_mtu, (unsigned)st.used_entries, (unsigned)st.free_entries, (unsigned)st.total_entries,
+               secure_enabled(), g_meta.dedupe_ms, g_ble_mtu, (unsigned)st.used_entries, (unsigned)st.free_entries, (unsigned)st.total_entries,
                MAX_SIGNALS, MAX_RULES, MAX_DEVICES, MAX_RAW, MAX_ACTIONS);
     tr_end(tr, &o);
 }
@@ -357,6 +358,24 @@ static void cmd_ui(tr_id_t tr, long q, const char *cmd, const char *line)
     tr_end(tr, &o);
 }
 
+/* The access header (secure.c). Without "h": read it. With "h": set it, "" clears. Only UART and an accepted
+ * Bluetooth link get here. */
+static void cmd_access(tr_id_t tr, long q, const char *line)
+{
+    char h[SECURE_HEADER_MAX + 8], cur[SECURE_HEADER_MAX + 1];
+    bool set = js_str(line, "h", h, sizeof h);
+    if (set) {
+        const char *err = secure_set(h, tr == TR_BLE);
+        if (err) return reply_err(tr, q, err);
+    }
+    secure_get(cur, sizeof cur);
+    out_t o; tr_begin(tr, &o);
+    out_printf(&o, "{\"q\":%ld,\"ok\":true,\"set\":%d,\"h\":", q, cur[0] != 0);
+    out_jstr(&o, cur);
+    out_puts(&o, "}");
+    tr_end(tr, &o);
+}
+
 static void handle(const char *line, tr_id_t tr)
 {
     long q = 0, v;
@@ -365,6 +384,8 @@ static void handle(const char *line, tr_id_t tr)
     if (!js_str(line, "cmd", cmd, sizeof cmd)) return reply_err(tr, q, "missing cmd");
 
     if (!strcmp(cmd, "ping")) reply_simple(tr, q, NULL);
+    else if (!strcmp(cmd, "hello")) reply_simple(tr, q, ",\"enc\":0");    /* an encrypted link never gets this far unproven */
+    else if (!strcmp(cmd, "access")) cmd_access(tr, q, line);
     else if (!strcmp(cmd, "info")) cmd_info(tr, q);
     else if (!strcmp(cmd, "list")) cmd_list(tr, q);
     else if (!strcmp(cmd, "get")) cmd_get(tr, q, line);
@@ -475,6 +496,8 @@ void proto_feed(tr_id_t tr, const uint8_t *data, size_t len)
         else s_len[tr] = 0;                 /* overlong line: drop it */
     }
 }
+
+void proto_reset(tr_id_t tr) { s_len[tr] = 0; }
 
 void proto_init(void)
 {

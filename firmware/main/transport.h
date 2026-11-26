@@ -21,3 +21,4 @@ void ev_send_usb(const char *json);
 /* Implemented by ble.c */
 void ble_tx_write(const char *d, size_t n);
 bool ble_tx_ready(void);
+bool ble_in_host_task(void);
