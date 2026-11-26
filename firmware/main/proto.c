@@ -454,7 +454,7 @@ static void handle(const char *line, tr_id_t tr)
         if (n < 4) return reply_err(tr, q, "raw required");
         reply_simple(tr, q, NULL);
         engine_on_frame(s_raw, n, esp_timer_get_time());
-    } else if (!strcmp(cmd, "record") || !strcmp(cmd, "learn")) {
+    } else if (!strcmp(cmd, "record")) {
         v = 1; js_int(line, "on", &v);
         engine_record(v);
         ilog(v ? "recording on" : "recording off");

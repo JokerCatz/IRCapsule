@@ -10,10 +10,9 @@
 #include "freertos/queue.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
-#include "soc/gpio_reg.h"
-#include "soc/soc.h"
 
 #define RMT_RES_HZ     1000000
+#define RX_MARK_LEVEL  0           /* the VS1838B output is low while it sees infrared */
 #define RX_SYMBOLS     640         /* 1280 mark/space entries, enough for long AC frames */
 #define NEC_TOL(x, ref) ((x) > (ref) * 7 / 10 && (x) < (ref) * 13 / 10)
 
@@ -22,8 +21,6 @@ static rmt_encoder_handle_t s_copy;
 static QueueHandle_t s_rxq;
 static rmt_symbol_word_t *s_rxbuf;
 static size_t s_rx_cap;
-static bool s_loop;
-static int s_mark_level = 1;
 static volatile bool s_armed;
 static volatile int64_t s_last_rx_us;
 static volatile int64_t s_tx_block_until;
@@ -41,10 +38,8 @@ static bool IRAM_ATTR rx_done(rmt_channel_handle_t ch, const rmt_rx_done_event_d
     return woken == pdTRUE;
 }
 
-esp_err_t ir_init(int tx_gpio, int rx_gpio, bool loopback, int rx_mark_level)
+esp_err_t ir_init(int tx_gpio, int rx_gpio)
 {
-    s_loop = loopback;
-    s_mark_level = rx_mark_level;
     rmt_tx_channel_config_t tc = {
         .gpio_num = tx_gpio, .clk_src = RMT_CLK_SRC_DEFAULT, .resolution_hz = RMT_RES_HZ,
         .mem_block_symbols = 48, .trans_queue_depth = 4,
@@ -63,11 +58,6 @@ esp_err_t ir_init(int tx_gpio, int rx_gpio, bool loopback, int rx_mark_level)
     s_rxq = xQueueCreate(4, sizeof(rx_evt_t));
     rmt_rx_event_callbacks_t cb = { .on_recv_done = rx_done };
     ESP_ERROR_CHECK(rmt_rx_register_event_callbacks(s_rx, &cb, NULL));
-    if (loopback && tx_gpio == rx_gpio) {
-        /* pad drives RMT TX out and feeds RMT RX in: bench test with no external parts */
-        /* only set the output-enable bit; gpio_set_direction() would rewire the pad to plain GPIO-out */
-        REG_WRITE(GPIO_ENABLE_W1TS_REG, 1u << tx_gpio);
-    }
     ESP_ERROR_CHECK(rmt_enable(s_tx));
     ESP_ERROR_CHECK(rmt_enable(s_rx));
     return ESP_OK;
@@ -119,20 +109,6 @@ esp_err_t ir_send_raw(const uint16_t *us, size_t n, uint32_t carrier_khz)
     return err;
 }
 
-esp_err_t ir_send_nec(uint8_t addr, uint8_t cmd, uint32_t carrier_khz)
-{
-    uint16_t us[2 + 64 + 2];
-    size_t k = 0;
-    us[k++] = 9000; us[k++] = 4500;
-    uint32_t w = addr | ((uint32_t)(uint8_t)~addr << 8) | ((uint32_t)cmd << 16) | ((uint32_t)(uint8_t)~cmd << 24);
-    for (int i = 0; i < 32; i++) {
-        us[k++] = 560;
-        us[k++] = (w >> i & 1) ? 1690 : 560;
-    }
-    us[k++] = 560; us[k++] = 0; /* stop mark, trailing space not needed */
-    return ir_send_raw(us, k - 1, carrier_khz);
-}
-
 int64_t ir_last_rx_time_us(void) { return s_last_rx_us; }
 
 esp_err_t ir_receive(uint16_t *us, size_t max, size_t *n, uint32_t timeout_ms)
@@ -155,7 +131,7 @@ esp_err_t ir_receive(uint16_t *us, size_t max, size_t *n, uint32_t timeout_ms)
         uint16_t du[2] = { s_rxbuf[i].duration0, s_rxbuf[i].duration1 };
         for (int j = 0; j < 2; j++) {
             if (du[j] == 0) continue;
-            if (!started) { if (lv[j] != s_mark_level) continue; started = true; }
+            if (!started) { if (lv[j] != RX_MARK_LEVEL) continue; started = true; }
             if (k < max) us[k++] = du[j];
         }
     }

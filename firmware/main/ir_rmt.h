@@ -13,15 +13,11 @@ typedef struct {
     size_t    n;
 } ir_raw_t;
 
-/* tx_gpio/rx_gpio may be the same pin with loopback=true (bench test without hardware). */
-/* rx_mark_level: pin level that means 'IR present' (0 for VS1838B, 1 for loopback test). */
-esp_err_t ir_init(int tx_gpio, int rx_gpio, bool loopback, int rx_mark_level);
+/* tx_gpio drives the emitters; rx_gpio is the output of a VS1838B (low while it sees infrared). */
+esp_err_t ir_init(int tx_gpio, int rx_gpio);
 
 /* Send raw mark/space list. carrier_khz == 0 disables the hardware carrier. */
 esp_err_t ir_send_raw(const uint16_t *us, size_t n, uint32_t carrier_khz);
-
-/* Build and send an NEC frame (32-bit, address/command with inverted check bytes). */
-esp_err_t ir_send_nec(uint8_t addr, uint8_t cmd, uint32_t carrier_khz);
 
 /* Blocking receive of one frame. Returns ESP_OK and fills us[] (up to max) with n entries. */
 esp_err_t ir_receive(uint16_t *us, size_t max, size_t *n, uint32_t timeout_ms);

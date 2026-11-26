@@ -40,5 +40,7 @@ void engine_set_layer(uint8_t l);
 void ilog(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 int  engine_logs(log_t *out, int max);
 
-/* Undo VS1838B mark shrinkage on long dense frames (see tools/ircap.py). */
+/* A VS1838B on long, dense frames (air conditioners) outputs marks that get shorter while the spaces grow by
+ * as much. Rebuild every mark at its normal length and give the difference back to the space. Frames whose
+ * marks do not drift are left as they are. */
 void engine_normalise(uint16_t *raw, size_t n);

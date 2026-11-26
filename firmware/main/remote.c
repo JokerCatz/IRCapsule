@@ -43,7 +43,7 @@ static const key_def_t KEYS[] = {
     { "back",   CC, 0x0224 },     /* AC Back */
     { "back2",  KB, 0x29 },       /* keyboard Escape */
     { "home",   CC, 0x0223 },     /* AC Home */
-    { "input",  CC, 0x01BB },     /* TV_INPUT in the layout of Google's remote: needs compatibility mode */
+    { "input",  CC, 0x01BB },     /* TV_INPUT in the layout of Google's remote */
     { "input2", CC, 0x0089 },     /* Media Select TV */
     { "settings",  CC, 0x0096 },  /* SETTINGS in the layout of Google's remote */
     { "settings2", CC, 0x019F },  /* SETTINGS in Android's generic layout */

@@ -58,6 +58,13 @@ async def main():
         l = await Link(dev).open()
         r = await l.call("ping"); check("open: a command works without hello", r and r["ok"], r)
         r = await l.call("hello"); check("open: hello says enc 0", r and r.get("enc") == 0, r)
+        big = [9000, 4500] + [560, 1690] * 599                         # 1200 entries
+        r = await l.call("sig_put", t=30, name="access-tmp", raw=big)
+        if r and r.get("ok"):
+            g = await l.call("get", t=30, id=r["id"]); check("open: 1200 entries there and back", g and g.get("raw") == big, g and g.get("n"))
+            await l.call("sig_del", id=r["id"])
+        else:
+            check("open: 1200-entry write", False, r)
         r = await l.call("info"); check("info reports no header", r and r.get("access") == 0, r)
         await l.close(); await pause(2)
 

@@ -176,7 +176,6 @@ python3 firmware/tools/ledtest_check.py     # the LED test command
 python3 firmware/tools/burst_check.py       # commands sent back to back
 python3 firmware/tools/access_check.py      # access header and encryption (USB + this computer's Bluetooth)
 python3 firmware/tools/remote_check.py      # TV remote commands. WARNING: forgets the paired TV
-python3 firmware/tools/blecheck.py          # Bluetooth transfer (capsule without header, one saved signal)
 python3 firmware/tools/bridge.py 8765       # USB <-> WebSocket for testing the web page
 python3 firmware/tools/capture.py "$IRCAP_PORT" captures/tv.jsonl 60 tv   # log raw frames to a file
 ```

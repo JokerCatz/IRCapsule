@@ -75,7 +75,7 @@ void app_main(void)
     ESP_ERROR_CHECK(store_init());
     engine_init();
     proto_init();
-    ESP_ERROR_CHECK(ir_init(IR_TX_GPIO, IR_RX_GPIO, false, 0));
+    ESP_ERROR_CHECK(ir_init(IR_TX_GPIO, IR_RX_GPIO));
     ble_start();
 
     xTaskCreate(usb_rx_task, "usb_rx", 4096, NULL, 4, NULL);
