@@ -92,7 +92,8 @@ header and draft press counters are not part of a backup. A changed name applies
 ## Config page
 
 Hosted with GitHub Pages: <https://jokercatz.github.io/IRCapsule/> ([demo without a device](https://jokercatz.github.io/IRCapsule/?demo=1),
-[wiring diagram](https://jokercatz.github.io/IRCapsule/docs/wiring.html)). Bluetooth and USB need Chrome or Edge.
+[wiring diagram](https://jokercatz.github.io/IRCapsule/docs/wiring.html)). The page is available in English, Traditional Chinese and Simplified Chinese: it follows the browser's language,
+and you can switch at the top of the page. Bluetooth and USB need Chrome or Edge.
 On Linux, Web Bluetooth is off by default: enable `chrome://flags/#enable-experimental-web-platform-features`
 and relaunch the browser, or use USB.
 
