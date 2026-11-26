@@ -109,7 +109,7 @@ const ZH = {
   "Record":"錄製","Signals":"訊號","Rules":"對照","Log":"紀錄","Device":"裝置",
   "Start recording":"開始錄製","Stop recording":"停止錄製","Point any remote at the receiver and press keys. Each new key becomes a numbered draft; pressing the same key again only raises its counter. Name the drafts below to make them usable.":"對著接收頭按任何遙控器的鍵。每個新的鍵會成為一筆依序編號的草稿，重複按同一個鍵只會增加次數。在下方為草稿命名後才能使用。",
   "LED test":"LED 測試","Start LED test":"開始 LED 測試","Stop":"停止","All LEDs blink for 60 s. Look through a phone camera (try the front one). Don't stare at them up close.":"所有 LED 閃爍 60 秒。請用手機相機觀看（先試前鏡頭），不要近距離直視。",
-  "Live frames":"即時收到的訊號","Nothing heard yet.":"還沒有收到訊號。","Drafts":"草稿","No drafts. Start recording and press some keys.":"沒有草稿。開始錄製並按幾個鍵吧。",
+  "Live frames":"即時收到的訊號","Clear list":"清除清單","Nothing heard yet.":"還沒有收到訊號。","Drafts":"草稿","No drafts. Start recording and press some keys.":"沒有草稿。開始錄製並按幾個鍵吧。",
   "Fill names from a list":"用清單批次命名","One name per line, applied in recording order to the drafts that have no name yet.":"每行一個名稱，依錄製順序套用到還沒命名的草稿。",
   "Apply names":"套用名稱","Save named drafts":"儲存已命名的草稿","Delete":"刪除","Name":"名稱","Type":"類型","Device":"裝置","Wave":"波形","Heard":"次數","Name this signal":"為這個訊號命名",
   "Appliance command":"家電指令","Remote key":"遙控器按鍵","(no device)":"（無）","Preview":"預覽","New draft":"新草稿","Draft":"草稿","Known":"已儲存","Triggered":"已觸發","Ignored":"忽略",
@@ -443,6 +443,8 @@ async function refresh() {
 }
 function refreshSoon() { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refresh().catch(() => {}), 250); }
 
+/* The live list only lives in this page; clearing it does not touch anything on the capsule. */
+function clearLive() { S.frames.length = 0; S.frameRaw.clear(); }
 function onEvent(ev) {
   if (ev.ev === "frame") {
     if (ev.raw) S.frameRaw.set(ev.seq, ev.raw);
@@ -503,7 +505,7 @@ async function connect(kind, url) {
     S.link = null; S.dev = null; setStatus("disconnected"); if (e.name !== "NotFoundError") toast(e.message || String(e), true); render();
   }
 }
-function disconnected() { S.link = null; S.dev = null; S.demo = null; setStatus("disconnected"); renderTabs(); render(); }
+function disconnected() { clearLive(); S.link = null; S.dev = null; S.demo = null; setStatus("disconnected"); renderTabs(); render(); }
 function setStatus(s, extra) {
   S.status = s; const el = $("#status");
   el.textContent = t(s) + (extra ? " · " + extra : ""); el.className = "chip " + (s === "connected" ? "ok" : s === "connecting…" ? "warn" : "");
@@ -592,7 +594,8 @@ function renderRecord() {
       h("p", { class: "muted", style: "margin:0;max-width:78ch" }, t("Point any remote at the receiver and press keys. Each new key becomes a numbered draft; pressing the same key again only raises its counter. Name the drafts below to make them usable.")),
       S.demo && h("div", { class: "row" }, h("span", { class: "chip warn" }, t("Demo mode: a simulated capsule runs in this page.")), h("span", { class: "muted" }, t("Simulate a remote key")),
         ...["A", "B", "AC", "NEW"].map(k => h("button", { class: "btn", onclick: () => S.demo.hear(S.demo.keys[k]) }, k === "AC" ? t("AC state") : k === "NEW" ? "+" : t("Key " + k))))),
-    h("div", { class: "card" }, h("h2", null, t("Live frames")), h("div", { class: "live", id: "live" })),
+    h("div", { class: "card" }, h("div", { class: "row" }, h("h2", { style: "margin:0" }, t("Live frames")), h("span", { class: "grow" }),
+      h("button", { class: "btn", onclick: () => { clearLive(); renderLive(); } }, t("Clear list"))), h("div", { class: "live", id: "live" })),
     h("div", { class: "card" }, h("h2", null, t("Drafts") + " (" + drafts.length + ")"),
       drafts.length ? [
         h("div", { class: "tablewrap" }, h("table", { class: "stack drafts" }, h("thead", null, h("tr", null, ["#", t("Wave"), "Protocol", t("Entries"), t("Heard"), t("Name"), t("Type"), t("Device"), ""].map(x => h("th", null, x)))), h("tbody", null, rows))),
