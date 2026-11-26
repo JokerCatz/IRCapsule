@@ -6,7 +6,7 @@ terminated by `\n`.
 | Transport | How |
 |---|---|
 | USB serial | The C3's USB-Serial/JTAG port, 115200 8N1 (the rate is nominal). Opening the port **reboots the board**; wait about 2 s, then ping until it answers. |
-| Bluetooth LE | Service `9f1d0001-6b7a-4c5e-8a2b-1c4a9e5d7f10`. Write lines to `…0002` (write, with or without response). Subscribe to `…0003` (notify) for replies and events. Lines are split into chunks of at most MTU−3 bytes; reassemble on `\n`. No pairing. Only one client at a time. |
+| Bluetooth LE | Service `9f1d0001-6b7a-4c5e-8a2b-1c4a9e5d7f10`. Write lines to `…0002` (write, with or without response). Subscribe to `…0003` (notify) for replies and events. Lines are split into chunks of at most MTU−3 bytes; reassemble on `\n`. No pairing: the capsule refuses pairing requests (remove any old bond on the host). Only one client at a time. |
 
 ## Requests and replies
 

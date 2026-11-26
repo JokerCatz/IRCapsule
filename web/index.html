@@ -121,7 +121,7 @@ const ZH = {
   "Settings":"設定","Bluetooth name (applies after reboot)":"藍牙名稱（重開機後生效）","Ignore repeats within (ms)":"忽略重複觸發的間隔（毫秒）","Active layer":"目前圖層",
   "Backup":"備份","Export backup":"匯出備份","Import backup":"匯入備份","Exporting":"匯出中","Importing":"匯入中","Reboot":"重開機","Factory reset":"恢復原廠設定","This erases all signals, rules and devices on the capsule. Continue?":"這會清除膠囊上所有的訊號、規則與裝置。要繼續嗎？",
   "Danger zone":"危險操作","Signal sent":"已發射","Saved":"已儲存","Failed":"失敗","Heard x":"收到次數","entries":"筆","Total":"總長","Waveform":"波形","Linear time":"線性時間軸","Squeezed (long gaps shortened)":"壓縮（縮短長間隔）","Zoom":"縮放","Copy timings":"複製時間資料",
-  "Unsupported in this browser.":"此瀏覽器不支援。","Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy.":"Web Bluetooth 需要 Chrome 或 Edge（Android/桌面）。iPhone 請使用 Bluefy 等瀏覽器。","Web Bluetooth only works on an https:// page (or localhost).":"Web Bluetooth 只能在 https:// 網頁（或 localhost）使用。","On iPhone and iPad, Chrome and Safari have no Web Bluetooth. Use a browser such as Bluefy.":"iPhone 與 iPad 上的 Chrome 和 Safari 沒有 Web Bluetooth。請使用 Bluefy 等瀏覽器。","Open this page in Chrome itself. Browsers inside other apps (such as LINE) have no Web Bluetooth.":"請直接用 Chrome 開啟本頁。其他 App（例如 LINE）內建的瀏覽器沒有 Web Bluetooth。","Chrome on Linux has Web Bluetooth switched off. Paste this into the address bar, set it to Enabled, then press Relaunch:":"Linux 版 Chrome 預設關閉 Web Bluetooth。請把下面這行貼到網址列，改成 Enabled，再按 Relaunch：","This also enables other experimental features; you can set it back to Default later. Or plug in the cable and use USB serial.":"這也會開啟其他實驗功能，之後可以改回 Default。也可以接上傳輸線，改用「USB 序列埠」。","Capsule not in the list? Check that Bluetooth is on and that no other phone or tab is already connected to it.":"清單裡找不到膠囊？請確認藍牙已開啟，而且沒有其他手機或分頁正連著它。",
+  "Unsupported in this browser.":"此瀏覽器不支援。","Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy.":"Web Bluetooth 需要 Chrome 或 Edge（Android/桌面）。iPhone 請使用 Bluefy 等瀏覽器。","Web Bluetooth only works on an https:// page (or localhost).":"Web Bluetooth 只能在 https:// 網頁（或 localhost）使用。","On iPhone and iPad, Chrome and Safari have no Web Bluetooth. Use a browser such as Bluefy.":"iPhone 與 iPad 上的 Chrome 和 Safari 沒有 Web Bluetooth。請使用 Bluefy 等瀏覽器。","Open this page in Chrome itself. Browsers inside other apps (such as LINE) have no Web Bluetooth.":"請直接用 Chrome 開啟本頁。其他 App（例如 LINE）內建的瀏覽器沒有 Web Bluetooth。","Chrome on Linux has Web Bluetooth switched off. Paste this into the address bar, set it to Enabled, then press Relaunch:":"Linux 版 Chrome 預設關閉 Web Bluetooth。請把下面這行貼到網址列，改成 Enabled，再按 Relaunch：","This also enables other experimental features; you can set it back to Default later. Or plug in the cable and use USB serial.":"這也會開啟其他實驗功能，之後可以改回 Default。也可以接上傳輸線，改用「USB 序列埠」。","The link dropped while connecting. Check that no other phone or tab is connected. If this device ever paired with the capsule, the old pairing breaks the connection: Remove it (also called Forget) in the system Bluetooth settings, then try again. On Linux you can also run:":"連線途中斷線了。請確認沒有其他手機或分頁正連著膠囊。如果這台裝置曾和膠囊配對過，舊配對紀錄會讓連線失敗：請到系統藍牙設定「移除裝置」（或「忘記」），再試一次。Linux 也可以執行：","Capsule not in the list? Check that Bluetooth is on and that no other phone or tab is already connected to it.":"清單裡找不到膠囊？請確認藍牙已開啟，而且沒有其他手機或分頁正連著它。",
   "Web Serial needs desktop Chrome or Edge.":"Web Serial 需要桌面版 Chrome 或 Edge。","Demo mode: a simulated capsule runs in this page.":"示範模式：此頁面內執行的是模擬的膠囊。",
   "Simulate a remote key":"模擬按下遙控器的鍵","Key A":"按鍵 A","Key B":"按鍵 B","AC state":"冷氣狀態",
   "drafts":"草稿","signals":"訊號","rules":"規則","Name needed before use":"需要先命名才能使用","Saved {n}":"已儲存 {n} 筆","Nothing to save: give the drafts names first.":"沒有可儲存的項目，請先替草稿命名。",
@@ -467,6 +467,11 @@ function bluetoothHelp() {
   if (/Linux/.test(ua) && !/CrOS/.test(ua)) return [t("Chrome on Linux has Web Bluetooth switched off. Paste this into the address bar, set it to Enabled, then press Relaunch:"), "chrome://flags/#enable-experimental-web-platform-features", t("This also enables other experimental features; you can set it back to Default later. Or plug in the cable and use USB serial.")];
   return [t("Web Bluetooth needs Chrome or Edge (Android/desktop). On iPhone use a browser such as Bluefy."), "", ""];
 }
+function bluetoothDroppedNote() {
+  return h("div", { class: "note" }, h("div", null, t("The link dropped while connecting. Check that no other phone or tab is connected. If this device ever paired with the capsule, the old pairing breaks the connection: Remove it (also called Forget) in the system Bluetooth settings, then try again. On Linux you can also run:")),
+    h("div", { class: "mono", style: "margin:6px 0;overflow-wrap:anywhere" }, "bluetoothctl devices", h("br"), "bluetoothctl remove <address>"),
+    h("div", { class: "muted mono", style: "overflow-wrap:anywhere" }, S.bleDrop));
+}
 function bluetoothNote() {
   if (navigator.bluetooth) return h("p", { class: "muted", style: "margin:0" }, t("Capsule not in the list? Check that Bluetooth is on and that no other phone or tab is already connected to it."));
   const [text, flag, extra] = bluetoothHelp();
@@ -477,6 +482,7 @@ function bluetoothNote() {
 
 async function connect(kind, url) {
   setStatus("connecting…");
+  S.bleDrop = "";
   let link;
   try {
     if (kind === "ble") link = new BleLink(); else if (kind === "serial") link = new SerialLink(); else if (kind === "ws") link = new WsLink(); else { link = new MockLink(); S.demo = link; }
@@ -492,6 +498,8 @@ async function connect(kind, url) {
     setStatus("connected", link.name); renderTabs(); render();
   } catch (e) {
     console.error(e); if (link && link.close) try { link.close(); } catch (x) {}
+    // a drop while setting up the BLE link gets a hint that stays on screen
+    if (kind === "ble" && (e.name === "NetworkError" || /GATT|disconnected/i.test(e.message || ""))) S.bleDrop = e.message || e.name;
     S.link = null; S.dev = null; setStatus("disconnected"); if (e.name !== "NotFoundError") toast(e.message || String(e), true); render();
   }
 }
@@ -534,6 +542,7 @@ function renderLanding() {
       h("button", { class: "btn", onclick: () => connect("serial") }, t("USB serial")),
       h("button", { class: "btn", onclick: () => connect("demo") }, t("Demo (no device)")),
       bridge && h("button", { class: "btn", onclick: () => connect("ws", bridge) }, "Bridge")),
+    S.bleDrop && bluetoothDroppedNote(),
     bluetoothNote(),
   );
 }
